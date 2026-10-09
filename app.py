@@ -121,12 +121,21 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
         return JSONResponse(content={"analysis": analysis})
 
     @app.post("/dna/analyze")
-    async def analyze_artist_dna(request: Request, file: UploadFile = File(...)) -> JSONResponse:
-        filename = Path(file.filename or "").name
+    async def analyze_artist_dna(
+        request: Request,
+        audio: UploadFile | None = File(default=None),
+        file: UploadFile | None = File(default=None),
+    ) -> JSONResponse:
+        # The production /api/dna3 gateway sends the multipart field "audio".
+        # Keep "file" as a compatibility alias for direct prototype callers.
+        upload = audio or file
+        if upload is None:
+            raise HTTPException(status_code=400, detail="Fichier audio manquant.")
+        filename = Path(upload.filename or "").name
         if Path(filename).suffix.lower() not in ALLOWED_SUFFIXES:
             raise HTTPException(status_code=415, detail="Format non pris en charge. Fournir un MP3.")
-        payload = await file.read(MAX_UPLOAD_BYTES + 1)
-        await file.close()
+        payload = await upload.read(MAX_UPLOAD_BYTES + 1)
+        await upload.close()
         if not payload:
             raise HTTPException(status_code=400, detail="Fichier audio vide.")
         if len(payload) > MAX_UPLOAD_BYTES:
@@ -151,7 +160,11 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
             # server logs so real-model smoke tests can identify the failing component.
             logger.exception("Échec d'un composant d'analyse ARTIST DNA (%s)", type(exc).__name__)
             raise HTTPException(status_code=502, detail="Échec d'un composant d'analyse ARTIST DNA.") from exc
-        return JSONResponse(content={"analysis": analysis})
+        # Match the existing ARTIST OS /api/dna3 gateway contract.
+        return JSONResponse(
+            content={"ok": True, "dna": analysis},
+            headers={"Cache-Control": "no-store"},
+        )
 
     return app
 
