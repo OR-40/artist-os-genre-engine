@@ -95,11 +95,23 @@ class ArtistDNAEngineTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_default_pipeline_uses_only_the_validated_baseline_model(self):
+    def test_default_pipeline_configures_baseline_and_loadable_ast_checkpoint(self):
         with patch.dict("os.environ", {}, clear=True):
             engine = ArtistDNAEngine(FakeVocalDetector())
-        self.assertEqual([item[0] for item in DEFAULT_GENRE_MODELS], ["genre_baseline"])
-        self.assertEqual([item.name for item in engine.classifiers], ["genre_baseline"])
+        self.assertEqual(
+            [item[0] for item in DEFAULT_GENRE_MODELS],
+            ["genre_baseline", "genre_ast"],
+        )
+        self.assertEqual(
+            [item.name for item in engine.classifiers],
+            ["genre_baseline", "genre_ast"],
+        )
+        self.assertEqual(engine.classifiers[0].window_seconds, 30)
+        self.assertEqual(engine.classifiers[1].window_seconds, 10)
+        self.assertEqual(
+            engine.classifiers[1].model_id,
+            "Koras1k/ast-megafinetuned-gtzan-v2-0.97score",
+        )
 
     def test_combines_two_genre_candidates_and_vocal_detection(self):
         result = self.engine.analyze_file(self.audio_path)
