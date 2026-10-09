@@ -45,7 +45,7 @@ def create_app(detector: Any | None = None) -> FastAPI:
         }
 
     @app.post("/analyze")
-    async def analyze(file: UploadFile = File(...), request: Request = None) -> JSONResponse:
+    async def analyze(request: Request, file: UploadFile = File(...)) -> JSONResponse:
         filename = Path(file.filename or "").name
         suffix = Path(filename).suffix.lower()
         if suffix not in ALLOWED_SUFFIXES:
