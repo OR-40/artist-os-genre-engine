@@ -27,13 +27,27 @@ FIELDS = [
 ]
 STATUSES = {"pending", "approved", "rejected"}
 URL_FIELDS = ("source_url", "license_url")
-REQUIRED_FIELDS = ("track_id", "title", "source_url", "license_name", "license_url", "rights_review_status")
+REQUIRED_FIELDS = (
+    "track_id",
+    "title",
+    "source_url",
+    "audio_path",
+    "license_name",
+    "license_url",
+    "rights_review_status",
+    "genre_labels",
+)
+
+
+def _text(value: object) -> str:
+    """Convertit une cellule CSV absente ou non textuelle en chaîne sûre."""
+    return value.strip() if isinstance(value, str) else ""
 
 
 def is_http_url(value: str) -> bool:
     try:
         parsed = urlparse(value.strip())
-    except ValueError:
+    except (AttributeError, ValueError):
         return False
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
@@ -46,29 +60,33 @@ def validate_rows(rows: list[dict[str, str]]) -> list[str]:
 
     for row_number, row in enumerate(rows, start=2):
         for field in REQUIRED_FIELDS:
-            if not (row.get(field) or "").strip():
+            if not _text(row.get(field)):
                 errors.append(f"ligne {row_number}: champ obligatoire vide: {field}")
 
-        track_id = (row.get("track_id") or "").strip()
+        track_id = _text(row.get("track_id"))
         if track_id:
             if track_id in seen_ids:
                 errors.append(f"ligne {row_number}: track_id dupliqué: {track_id}")
             seen_ids.add(track_id)
 
         for field in URL_FIELDS:
-            value = (row.get(field) or "").strip()
+            value = _text(row.get(field))
             if value and not is_http_url(value):
                 errors.append(f"ligne {row_number}: URL HTTP(S) invalide dans {field}: {value}")
 
-        status = (row.get("rights_review_status") or "").strip().lower()
+        status = _text(row.get("rights_review_status")).lower()
         if status and status not in STATUSES:
             errors.append(
                 f"ligne {row_number}: rights_review_status doit être l'un de {', '.join(sorted(STATUSES))}"
             )
 
         if status == "approved":
+            if _text(row.get("license_name")).upper() in {"UNKNOWN", "À VÉRIFIER", "A VERIFIER"}:
+                errors.append(
+                    f"ligne {row_number}: license_name doit identifier la licence lorsque rights_review_status=approved"
+                )
             for field in ("rights_reviewed_by", "rights_review_date"):
-                if not (row.get(field) or "").strip():
+                if not _text(row.get(field)):
                     errors.append(
                         f"ligne {row_number}: {field} obligatoire lorsque rights_review_status=approved"
                     )
@@ -84,10 +102,22 @@ def read_manifest(path: Path) -> tuple[list[dict[str, str]], list[str]]:
             reader = csv.DictReader(handle)
             if reader.fieldnames is None:
                 return [], ["CSV vide ou sans en-tête"]
+            if len(reader.fieldnames) != len(set(reader.fieldnames)):
+                return [], ["en-tête CSV invalide: noms de colonnes dupliqués"]
             missing = [field for field in FIELDS if field not in reader.fieldnames]
             if missing:
                 return [], ["colonnes manquantes: " + ", ".join(missing)]
-            return list(reader), []
+
+            rows: list[dict[str, str]] = []
+            errors: list[str] = []
+            for row_number, row in enumerate(reader, start=2):
+                if None in row:
+                    errors.append(f"ligne {row_number}: trop de valeurs par rapport aux colonnes")
+                    continue
+                rows.append(row)
+            if errors:
+                return [], errors
+            return rows, []
     except (OSError, UnicodeError, csv.Error) as exc:
         return [], [f"lecture CSV impossible: {exc}"]
 
@@ -120,16 +150,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     rows, read_errors = read_manifest(args.path)
-    errors = read_errors + validate_rows(rows)
+    errors = read_errors + (validate_rows(rows) if not read_errors else [])
     if errors:
         print("MANIFESTE INVALIDE")
         for error in errors:
             print(f"- {error}")
         return 1
 
-    approved = sum((row.get("rights_review_status") or "").strip().lower() == "approved" for row in rows)
-    pending = sum((row.get("rights_review_status") or "").strip().lower() == "pending" for row in rows)
-    rejected = sum((row.get("rights_review_status") or "").strip().lower() == "rejected" for row in rows)
+    approved = sum(_text(row.get("rights_review_status")).lower() == "approved" for row in rows)
+    pending = sum(_text(row.get("rights_review_status")).lower() == "pending" for row in rows)
+    rejected = sum(_text(row.get("rights_review_status")).lower() == "rejected" for row in rows)
     print(f"MANIFESTE VALIDE — {len(rows)} piste(s)")
     print(f"Droits vérifiés humainement (candidates) : {approved}")
     print(f"En attente de vérification : {pending}")
