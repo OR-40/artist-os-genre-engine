@@ -70,6 +70,14 @@ class ArtistDNAEngineTests(unittest.TestCase):
         self.assertEqual(self.a.calls, 1)
         self.assertEqual(self.b.calls, 1)
 
+    def test_long_song_uses_three_representative_windows(self):
+        long_path = Path(self.tmp.name) / "long.wav"
+        sf.write(long_path, np.zeros(120 * 16000, dtype=np.float32), 16000)
+        result = self.engine.analyze_file(long_path)
+        self.assertEqual(result["analysis_sampling"]["selected_audio_seconds"], 30.0)
+        self.assertEqual(len(result["analysis_sampling"]["selected_windows"]), 3)
+        self.assertEqual([w["start_seconds"] for w in result["analysis_sampling"]["selected_windows"]], [0.0, 55.0, 110.0])
+
     def test_marks_signature_as_not_generated_instead_of_inventing(self):
         result = self.engine.analyze_file(self.audio_path)
         self.assertEqual(result["artistic_signature"]["status"], "not_generated")
