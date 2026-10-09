@@ -2,12 +2,14 @@
 
 Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteuse, avant toute intégration à ARTIST OS.
 
-**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** À ce stade, il contient uniquement un validateur de manifeste et ses tests. Aucun modèle de classification n'est encore validé.
+**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** À ce stade, il contient un validateur de manifeste et ses tests. Aucun modèle de classification n'est encore validé.
 
 ## État actuel
 
-- Validation de la structure du manifeste CSV à 12 colonnes.
-- Contrôles des champs obligatoires, URL HTTP(S), identifiants dupliqués et statuts de vérification des droits.
+- Validation de la structure du manifeste CSV à 14 colonnes.
+- Contrôles des champs obligatoires, URL HTTP(S), identifiants dupliqués et statuts de revue.
+- Permissions distinctes consignées pour l'entraînement et l'usage commercial.
+- Export séparé des seules pistes marquées approved avec les deux permissions à yes, un réviseur et une date.
 - Tests automatiques exécutés par GitHub Actions.
 - Pas de téléchargement automatique de musique.
 - Pas de dataset audio réel validé pour l'entraînement.
@@ -34,16 +36,25 @@ Valider un manifeste :
 python -m src.license_manifest validate data/manifest.csv
 ```
 
-Le fichier `data/manifest.example.csv` est fictif. Il sert uniquement à illustrer le format et **ne constitue pas une donnée d'entraînement**.
+Exporter les lignes ayant passé les contrôles de structure et portant les deux permissions humaines explicites :
+
+```bash
+python -m src.license_manifest eligible data/manifest.csv --output data/eligible_manifest.csv
+```
+
+L'export est un garde-fou de workflow, pas une décision juridique. Il ne vérifie pas lui-même la validité d'une licence ni l'autorité de la personne qui a renseigné le CSV. Le fichier source reste intact et l'export peut contenir zéro piste.
+
+Le fichier data/manifest.example.csv est fictif. Il sert uniquement à illustrer le format et **ne constitue pas une donnée d'entraînement**.
 
 ## Conditions avant toute constitution du dataset
 
 1. Vérifier la source et les droits de chaque enregistrement individuellement.
 2. Confirmer explicitement que les droits couvrent l'usage envisagé, y compris l'entraînement/évaluation d'un système et l'exploitation commerciale du service.
-3. Conserver la page source, la licence exacte, la date de vérification et la personne ayant vérifié les droits.
-4. Écarter les pistes sous licence non commerciale, les licences incertaines et toute piste sans provenance vérifiable.
-5. Ne pas contourner les conditions d'un site ni aspirer massivement ses fichiers.
-6. Ne pas considérer le statut `approved` du CSV comme une validation juridique automatique : c'est une trace de revue humaine, pas un avis juridique.
+3. Vérifier les droits pertinents sur l'enregistrement et sur l'œuvre musicale, ainsi que les conditions attachées à toute licence ou autorisation.
+4. Conserver la page source, la licence exacte, la date de vérification et la personne ayant vérifié les droits.
+5. Écarter les pistes sous licence non commerciale, les licences incertaines et toute piste sans provenance vérifiable.
+6. Ne pas contourner les conditions d'un site ni aspirer massivement ses fichiers.
+7. Ne pas considérer le statut approved du CSV comme une validation juridique automatique : c'est une trace de revue humaine, pas un avis juridique.
 
 ## Protocole d'évaluation visé
 
