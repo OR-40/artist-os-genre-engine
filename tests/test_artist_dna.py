@@ -51,6 +51,8 @@ class ArtistDNAEngineTests(unittest.TestCase):
         self.assertEqual(result["vocal_analysis"]["model"], "FireRedVAD")
         self.assertEqual(result["vocal_analysis"]["singing"]["total_duration_seconds"], 3.0)
         self.assertEqual(result["genre_analysis"]["label_consensus"][0]["label"], "rock")
+        self.assertEqual(result["genre_analysis"]["label_consensus"][0]["models_agreeing"], 2)
+        self.assertEqual(result["genre_analysis"]["label_consensus"][0]["model_count"], 2)
         self.assertEqual(self.a.calls, 1)
         self.assertEqual(self.b.calls, 1)
 
