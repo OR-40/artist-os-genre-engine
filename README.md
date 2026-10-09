@@ -2,7 +2,7 @@
 
 Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteuse, avant toute intégration à ARTIST OS.
 
-**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** À ce stade, il contient un validateur de manifeste et ses tests. Aucun modèle de classification n'est encore validé.
+**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** Il contient un validateur de manifeste, un prototype de détection d'événements vocaux FireRedVAD et une API locale de test. Aucun modèle de classification de genres n'est encore validé.
 
 ## État actuel
 
@@ -10,7 +10,9 @@ Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteu
 - Contrôles des champs obligatoires, URL HTTP(S), identifiants dupliqués et statuts de revue.
 - Permissions distinctes consignées pour l'entraînement et l'usage commercial.
 - Export séparé des seules pistes marquées approved avec les deux permissions à yes, un réviseur et une date.
-- Tests automatiques exécutés par GitHub Actions.
+- Tests automatiques exécutés par GitHub Actions, y compris des tests de contrat de l'API locale.
+- Endpoint prototype `POST /analyze` : réponse `{ "analysis": ... }` ; format accepté à ce stade : WAV uniquement.
+- FLAC/OGG/MP3/M4A non pris en charge par l'API prototype tant qu'un décodeur dédié n'a pas été validé ; aucun déploiement ni branchement production.
 - Pas de téléchargement automatique de musique.
 - Premier inventaire de 12 morceaux enregistrés de Kevin MacLeod, avec pages officielles et licence CC BY 4.0 consignées dans `data/pilot_candidates.csv`.
 - Ces 12 pistes restent `pending` : aucun audio n'a été téléchargé et elles ne sont pas encore admises à l'entraînement/évaluation officielle.
@@ -19,6 +21,12 @@ Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteu
 ## Environnement
 
 Python 3.12 ou version compatible. Le validateur n'a pas de dépendance externe.
+
+Installer les dépendances légères de test (sans télécharger FireRedVAD ni ses poids) :
+
+```bash
+python -m pip install -r requirements-test-api.txt
+```
 
 Exécuter les tests :
 
