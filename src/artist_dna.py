@@ -197,8 +197,7 @@ class ArtistDNAEngine:
         instrument_error: str | None = None
         if instrument_enabled:
             try:
-                # The existing service analyses the complete decoded track via
-                # POST /analyze, rather than the genre model's selected windows.
+                # The local ONNX classifier receives the selected representative windows.
                 if hasattr(self.instrument_analyzer, "analyze_file"):
                     instruments = self.instrument_analyzer.analyze_file(path)
                 else:
@@ -236,7 +235,7 @@ class ArtistDNAEngine:
             )
         elif instrument_error:
             instrument_analysis["reason"] = (
-                "Le service instruments n'a pas répondu correctement ; analyse instrumentale ignorée."
+                "Le classifieur ONNX n'a pas répondu correctement ; analyse instrumentale ignorée."
             )
 
         singing_seconds = float(singing.get("total_duration_seconds", 0) or 0)
