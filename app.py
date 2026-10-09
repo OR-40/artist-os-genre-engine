@@ -146,21 +146,27 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
                 mp3_path = Path(temp_dir) / "upload.mp3"
                 wav_path = Path(temp_dir) / "decoded.wav"
                 mp3_path.write_bytes(payload)
-                decode_mp3_to_wav(mp3_path, wav_path)
-                analysis = request.app.state.dna_engine.analyze_file(str(wav_path))
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Fichier MP3 illisible ou invalide.") from exc
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=503, detail="Poids du modèle ou fichier audio introuvables.") from exc
-        except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+                # Only decoding/validation errors are client-side 400s.
+                # A model ValueError must not be mislabeled as a corrupt MP3.
+                try:
+                    decode_mp3_to_wav(mp3_path, wav_path)
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail="Fichier MP3 illisible ou invalide.") from exc
+
+                try:
+                    analysis = request.app.state.dna_engine.analyze_file(str(wav_path))
+                except FileNotFoundError as exc:
+                    raise HTTPException(status_code=503, detail="Poids du modèle ou fichier audio introuvables.") from exc
+                except RuntimeError as exc:
+                    raise HTTPException(status_code=503, detail=str(exc)) from exc
+                except Exception as exc:
+                    logger.exception("Échec d'un composant d'analyse ARTIST DNA (%s)", type(exc).__name__)
+                    raise HTTPException(status_code=502, detail="Échec d'un composant d'analyse ARTIST DNA.") from exc
+        except HTTPException:
+            raise
         except OSError as exc:
             raise HTTPException(status_code=500, detail="Impossible de traiter le fichier audio temporaire.") from exc
-        except Exception as exc:
-            # Keep client-facing errors generic, but retain the real traceback in
-            # server logs so real-model smoke tests can identify the failing component.
-            logger.exception("Échec d'un composant d'analyse ARTIST DNA (%s)", type(exc).__name__)
-            raise HTTPException(status_code=502, detail="Échec d'un composant d'analyse ARTIST DNA.") from exc
         # Match the existing ARTIST OS /api/dna3 gateway contract.
         return JSONResponse(
             content={"ok": True, "dna": analysis},

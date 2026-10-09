@@ -21,6 +21,11 @@ class ExplodingDNAEngine:
         raise TypeError("diagnostic test failure")
 
 
+class ValueErrorDNAEngine:
+    def analyze_file(self, path):
+        raise ValueError("model output/configuration failure")
+
+
 class FakeDetector:
     def analyze_file(self, path):
         assert Path(path).suffix == ".wav"
@@ -95,6 +100,22 @@ class VocalAnalysisApiTests(unittest.TestCase):
             response = client.post("/dna/analyze")
             self.assertEqual(response.status_code, 400)
             self.assertEqual(response.json()["detail"], "Fichier audio manquant.")
+        finally:
+            client.close()
+
+    def test_dna_model_value_error_is_not_mislabeled_as_invalid_mp3(self):
+        app = create_app(detector=FakeDetector(), dna_engine=ValueErrorDNAEngine())
+        client = TestClient(app)
+        try:
+            with patch("app.decode_mp3_to_wav", side_effect=fake_decode_mp3_to_wav):
+                with self.assertLogs("artist_os_genre_engine", level="ERROR") as captured:
+                    response = client.post(
+                        "/dna/analyze",
+                        files={"file": ("sample.mp3", b"mocked MP3 payload", "audio/mpeg")},
+                    )
+            self.assertEqual(response.status_code, 502)
+            self.assertIn("model output/configuration failure", "\\n".join(captured.output))
+            self.assertNotIn("MP3 illisible", response.text)
         finally:
             client.close()
 

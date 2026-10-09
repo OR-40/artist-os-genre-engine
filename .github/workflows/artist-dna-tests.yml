@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - feat/fireredvad-vocal-detection
+      - fix/artist-dna-baseline-fallback-20261009
   push:
     branches:
       - feat/artist-dna-orchestrator

@@ -21,9 +21,11 @@ from src.instrument_classifier import LocalONNXInstrumentClassifier
 logger = logging.getLogger(__name__)
 
 
+# The baseline is the only default model. The AST candidate lacks a
+# Transformers config.json in its published repository and is opt-in only after
+# a dedicated loader has been validated.
 DEFAULT_GENRE_MODELS = (
     ("genre_baseline", "dima806/music_genres_classification"),
-    ("genre_ast", "neerajs7/AST-audio-classifier"),
 )
 
 
@@ -99,10 +101,17 @@ class ArtistDNAEngine:
             raise ValueError("window_seconds must be at least 5")
         self.vocal_detector = vocal_detector
         if classifiers is None:
-            model_specs = (
+            model_specs = [
                 ("genre_baseline", os.getenv("ARTIST_DNA_MODEL_BASELINE", DEFAULT_GENRE_MODELS[0][1])),
-                ("genre_ast", os.getenv("ARTIST_DNA_MODEL_AST", DEFAULT_GENRE_MODELS[1][1])),
-            )
+            ]
+            # AST is deliberately disabled by default: the published checkpoint
+            # does not load through Transformers' generic audio-classification
+            # pipeline. Do not enable it until a dedicated loader is tested.
+            if os.getenv("ARTIST_DNA_ENABLE_AST", "false").strip().lower() == "true":
+                model_specs.append((
+                    "genre_ast",
+                    os.getenv("ARTIST_DNA_MODEL_AST", "neerajs7/AST-audio-classifier"),
+                ))
             classifiers = [HuggingFaceGenreClassifier(name, model_id) for name, model_id in model_specs]
         self.classifiers = classifiers
         self.window_seconds = window_seconds
