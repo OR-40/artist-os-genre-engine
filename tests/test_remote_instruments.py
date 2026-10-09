@@ -20,6 +20,7 @@ class RemoteInstrumentAnalyzerTests(unittest.TestCase):
         analyzer = RemoteInstrumentAnalyzer(url="https://instruments.example", timeout_seconds=20)
         response = httpx.Response(
             200,
+            request=httpx.Request("POST", "https://instruments.example/analyze"),
             json={
                 "ok": True,
                 "model": "onnx-community/Musical-Instrument-Classification-ONNX",
@@ -52,7 +53,7 @@ class RemoteInstrumentAnalyzerTests(unittest.TestCase):
 
     def test_rejects_unexpected_service_response(self):
         analyzer = RemoteInstrumentAnalyzer(url="https://instruments.example", timeout_seconds=1)
-        response = httpx.Response(200, json={"ok": False, "error": "service unavailable"})
+        response = httpx.Response(200, request=httpx.Request("POST", "https://instruments.example/analyze"), json={"ok": False, "error": "service unavailable"})
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "sample.wav"
             path.write_bytes(b"decoded wav bytes")
