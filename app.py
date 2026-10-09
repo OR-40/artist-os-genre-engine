@@ -59,7 +59,7 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
     model_dir = Path(os.environ.get("FIREREDVAD_MODEL_DIR", "weights/FireRedVAD/AED"))
     app.state.detector = detector or FireRedVADDetector(
         model_dir=model_dir,
-        use_gpu=os.environ.get("FIREREDVAD_USE_GPU", "false").lower() == "true",
+        use_gpu=False,
     )
     app.state.model_dir = model_dir
     app.state.dna_engine = dna_engine or ArtistDNAEngine(vocal_detector=app.state.detector)
@@ -74,6 +74,7 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
         return {
             "status": "ok",
             "model": "FireRedVAD",
+            "execution_device": "CPU",
             "model_files_directory_exists": request.app.state.model_dir.is_dir(),
             "max_upload_bytes": MAX_UPLOAD_BYTES,
             "supported_formats": sorted(ALLOWED_SUFFIXES),
