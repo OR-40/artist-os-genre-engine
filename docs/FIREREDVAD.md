@@ -52,6 +52,21 @@ The JSON-compatible result contains duration and normalized timestamp segments f
 probabilities that a song contains vocals. Singing intervals must be checked against
 listening before treating them as ground truth.
 
+## Test de bout en bout avec le vrai modèle
+
+Ce test charge les poids FireRedVAD et envoie un WAV réel à l'endpoint FastAPI via le client HTTP de test. Il mesure le temps total, vérifie le contrat JSON et affiche le nombre de segments détectés. Il ne téléverse aucun fichier vers un service distant.
+
+Dans l'environnement où le modèle et le fichier audio existent déjà :
+
+```bash
+python -m pip install -r requirements-api.txt
+python scripts/smoke_test_real_api.py \
+  --audio /path/to/artist_os_test.wav \
+  --model-dir /path/to/pretrained_models/FireRedVAD/AED
+```
+
+Ajouter `--gpu` uniquement si PyTorch/CUDA et le modèle sont configurés pour GPU. Le premier appel inclut le chargement du modèle ; consigner ce temps séparément d'une mesure à chaud si l'objectif est la latence répétée. Vérifier ensuite les segments en écoutant les passages correspondants : le test automatique ne juge pas la justesse musicale.
+
 ## Tests
 
 The unit tests exercise interval sorting, overlap merging, duration clamping,
