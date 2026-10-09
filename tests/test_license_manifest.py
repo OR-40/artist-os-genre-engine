@@ -221,8 +221,8 @@ class LicenseManifestTests(unittest.TestCase):
         self.assertEqual(validate_rows(rows), [])
         self.assertEqual(len(rows), 12)
         self.assertTrue(all(row["rights_review_status"] == "pending" for row in rows))
-        self.assertTrue(all(row["training_use_permission"] == "yes" for row in rows))
-        self.assertTrue(all(row["commercial_use_permission"] == "yes" for row in rows))
+        self.assertTrue(all(row["training_use_permission"] == "unclear" for row in rows))
+        self.assertTrue(all(row["commercial_use_permission"] == "unclear" for row in rows))
         self.assertEqual(len({row["track_id"] for row in rows}), len(rows))
 
 
