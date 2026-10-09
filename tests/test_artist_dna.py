@@ -147,7 +147,7 @@ class ArtistDNAEngineTests(unittest.TestCase):
 
     def test_instrument_candidate_is_marked_experimental(self):
         result = self.engine.analyze_file(self.audio_path)
-        self.assertEqual(result["instrument_analysis"]["status"], "experimental")
+        self.assertEqual(result["instrument_analysis"]["status"], "experimental_mix_generalization_unvalidated")
         self.assertEqual(result["instrument_analysis"]["predictions"][0]["name"], "Electric Guitar")
 
     def test_instrument_service_failure_is_fail_closed(self):
