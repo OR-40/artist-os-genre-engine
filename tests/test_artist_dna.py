@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from src.artist_dna import ArtistDNAEngine
+from src.artist_dna import ArtistDNAEngine, DEFAULT_GENRE_MODELS
 from src.instrument_classifier import LocalONNXInstrumentClassifier, _sample_starts
 
 
@@ -66,6 +66,12 @@ class ArtistDNAEngineTests(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_default_pipeline_uses_only_the_validated_baseline_model(self):
+        with patch.dict("os.environ", {}, clear=True):
+            engine = ArtistDNAEngine(FakeVocalDetector())
+        self.assertEqual([item[0] for item in DEFAULT_GENRE_MODELS], ["genre_baseline"])
+        self.assertEqual([item.name for item in engine.classifiers], ["genre_baseline"])
 
     def test_combines_two_genre_candidates_and_vocal_detection(self):
         result = self.engine.analyze_file(self.audio_path)
