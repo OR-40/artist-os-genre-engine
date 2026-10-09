@@ -6,6 +6,7 @@ configuration is included. Keep it behind a trusted boundary during testing.
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,36 @@ from src.artist_dna import ArtistDNAEngine
 from src.vocal_detection import FireRedVADDetector
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-ALLOWED_SUFFIXES = {".wav"}
+ALLOWED_SUFFIXES = {".mp3"}
+
+
+def decode_mp3_to_wav(mp3_path: str | Path, wav_path: str | Path) -> None:
+    """Decode an uploaded MP3 to compact mono 16 kHz PCM WAV using FFmpeg."""
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                "-i", str(mp3_path), "-vn", "-ac", "1", "-ar", "16000",
+                "-c:a", "pcm_s16le", str(wav_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("FFmpeg est requis pour décoder les MP3.") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Le décodage MP3 a dépassé 180 secondes.") from exc
+    except subprocess.CalledProcessError as exc:
+        raise ValueError("Fichier MP3 illisible ou invalide.") from exc
+
+    try:
+        info = sf.info(str(wav_path))
+    except Exception as exc:
+        raise ValueError("Le MP3 n'a pas produit un audio valide.") from exc
+    if info.frames <= 0 or info.samplerate != 16000 or info.channels != 1:
+        raise ValueError("Le MP3 décodé ne contient pas d'audio mono 16 kHz valide.")
 
 
 def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> FastAPI:
@@ -44,6 +74,7 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
             "model_files_directory_exists": request.app.state.model_dir.is_dir(),
             "max_upload_bytes": MAX_UPLOAD_BYTES,
             "supported_formats": sorted(ALLOWED_SUFFIXES),
+            "decoded_audio": "mono PCM WAV 16 kHz, temporary only",
         }
 
     @app.post("/analyze")
@@ -51,10 +82,7 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
         filename = Path(file.filename or "").name
         suffix = Path(filename).suffix.lower()
         if suffix not in ALLOWED_SUFFIXES:
-            raise HTTPException(
-                status_code=415,
-                detail="Format non pris en charge pour ce prototype. Utiliser WAV.",
-            )
+            raise HTTPException(status_code=415, detail="Format non pris en charge. Fournir un MP3.")
 
         payload = await file.read(MAX_UPLOAD_BYTES + 1)
         await file.close()
@@ -64,18 +92,13 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
             raise HTTPException(status_code=413, detail="Fichier supérieur à la limite de 50 Mio.")
 
         try:
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as temp:
-                temp.write(payload)
-                temp.flush()
+            with tempfile.TemporaryDirectory() as temp_dir:
+                mp3_path = Path(temp_dir) / "upload.mp3"
+                wav_path = Path(temp_dir) / "decoded.wav"
+                mp3_path.write_bytes(payload)
+                decode_mp3_to_wav(mp3_path, wav_path)
                 try:
-                    info = sf.info(temp.name)
-                    if info.frames <= 0 or info.samplerate <= 0:
-                        raise ValueError("empty audio")
-                except Exception as exc:
-                    raise HTTPException(status_code=400, detail="Fichier audio illisible ou invalide.") from exc
-
-                try:
-                    analysis = request.app.state.detector.analyze_file(temp.name)
+                    analysis = request.app.state.detector.analyze_file(str(wav_path))
                 except FileNotFoundError as exc:
                     raise HTTPException(
                         status_code=503,
@@ -85,17 +108,20 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
                     raise HTTPException(status_code=503, detail="Dépendance FireRedVAD indisponible.") from exc
         except HTTPException:
             raise
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Fichier MP3 illisible ou invalide.") from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         except OSError as exc:
-            raise HTTPException(status_code=500, detail="Impossible de traiter le fichier temporaire.") from exc
+            raise HTTPException(status_code=500, detail="Impossible de traiter le fichier audio temporaire.") from exc
 
         return JSONResponse(content={"analysis": analysis})
-
 
     @app.post("/dna/analyze")
     async def analyze_artist_dna(request: Request, file: UploadFile = File(...)) -> JSONResponse:
         filename = Path(file.filename or "").name
         if Path(filename).suffix.lower() not in ALLOWED_SUFFIXES:
-            raise HTTPException(status_code=415, detail="Format non pris en charge. Utiliser WAV.")
+            raise HTTPException(status_code=415, detail="Format non pris en charge. Fournir un MP3.")
         payload = await file.read(MAX_UPLOAD_BYTES + 1)
         await file.close()
         if not payload:
@@ -103,21 +129,20 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
         if len(payload) > MAX_UPLOAD_BYTES:
             raise HTTPException(status_code=413, detail="Fichier supérieur à la limite de 50 Mio.")
         try:
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as temp:
-                temp.write(payload)
-                temp.flush()
-                info = sf.info(temp.name)
-                if info.frames <= 0 or info.samplerate <= 0:
-                    raise HTTPException(status_code=400, detail="Fichier audio invalide.")
-                analysis = request.app.state.dna_engine.analyze_file(temp.name)
-        except HTTPException:
-            raise
+            with tempfile.TemporaryDirectory() as temp_dir:
+                mp3_path = Path(temp_dir) / "upload.mp3"
+                wav_path = Path(temp_dir) / "decoded.wav"
+                mp3_path.write_bytes(payload)
+                decode_mp3_to_wav(mp3_path, wav_path)
+                analysis = request.app.state.dna_engine.analyze_file(str(wav_path))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Fichier MP3 illisible ou invalide.") from exc
         except FileNotFoundError as exc:
-            raise HTTPException(status_code=503, detail="Fichier audio ou poids de modèle introuvables.") from exc
+            raise HTTPException(status_code=503, detail="Poids du modèle ou fichier audio introuvables.") from exc
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Fichier audio invalide.") from exc
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail="Impossible de traiter le fichier audio temporaire.") from exc
         except Exception as exc:
             raise HTTPException(status_code=502, detail="Échec d'un composant d'analyse ARTIST DNA.") from exc
         return JSONResponse(content={"analysis": analysis})
