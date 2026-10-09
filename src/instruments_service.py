@@ -15,7 +15,7 @@ import numpy as np
 import soundfile as sf
 
 
-DEFAULT_INSTRUMENTS_URL = "https://artist-os-instruments-production.up.railway.app/analyze"
+DEFAULT_INSTRUMENTS_URL = ""
 
 
 def build_montage(audio: np.ndarray, sample_rate: int) -> np.ndarray:
