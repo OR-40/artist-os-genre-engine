@@ -14,6 +14,8 @@ from typing import Any, Callable
 import numpy as np
 import soundfile as sf
 
+from src.instrument_classifier import LocalONNXInstrumentClassifier
+
 
 DEFAULT_GENRE_MODELS = (
     ("genre_baseline", "dima806/music_genres_classification"),
@@ -87,6 +89,7 @@ class ArtistDNAEngine:
         vocal_detector: Any,
         classifiers: list[Any] | None = None,
         window_seconds: int = 30,
+        instrument_analyzer: Any | None = None,
     ) -> None:
         if window_seconds < 5:
             raise ValueError("window_seconds must be at least 5")
@@ -99,6 +102,7 @@ class ArtistDNAEngine:
             classifiers = [HuggingFaceGenreClassifier(name, model_id) for name, model_id in model_specs]
         self.classifiers = classifiers
         self.window_seconds = window_seconds
+        self.instrument_analyzer = instrument_analyzer or LocalONNXInstrumentClassifier()
 
     def _windows(self, audio: np.ndarray, sample_rate: int) -> list[tuple[float, np.ndarray]]:
         window_size = self.window_seconds * sample_rate
@@ -182,6 +186,16 @@ class ArtistDNAEngine:
 
         vocal = self.vocal_detector.analyze_file(path)
         singing = vocal.get("singing", {})
+        instrument_enabled = bool(getattr(self.instrument_analyzer, "enabled", False))
+        instruments = self.instrument_analyzer.analyze(mono, sample_rate, top_k=8) if instrument_enabled else []
+        instrument_analysis = {
+            "status": "experimental" if instrument_enabled else "not_enabled",
+            "model_id": getattr(self.instrument_analyzer, "model_id", None),
+            "predictions": instruments,
+            "note": "Scores are uncalibrated model outputs. This candidate was trained for isolated instruments; results on mixed full songs require validation.",
+        }
+        if not instrument_enabled:
+            instrument_analysis["reason"] = "Enable ARTIST_DNA_INSTRUMENTS_ENABLED=true to run the local ONNX candidate."
         return {
             "engine": "ARTIST DNA",
             "engine_version": "0.1.0",
@@ -202,8 +216,5 @@ class ArtistDNAEngine:
                 "status": "not_generated",
                 "reason": "A descriptive artistic signature requires validated musical evidence and must not be inferred from genre scores alone.",
             },
-            "instrument_analysis": {
-                "status": "not_connected",
-                "reason": "Instrument analysis has not yet been integrated into the standalone prototype.",
-            },
+            "instrument_analysis": instrument_analysis,
         }
