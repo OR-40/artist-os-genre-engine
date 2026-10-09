@@ -6,6 +6,7 @@ contract tests. This module does not claim a validated genre or instrument truth
 """
 from __future__ import annotations
 
+import logging
 import os
 from collections import defaultdict
 from pathlib import Path
@@ -14,7 +15,10 @@ from typing import Any, Callable
 import numpy as np
 import soundfile as sf
 
-from src.instrument_classifier import LocalONNXInstrumentClassifier
+from src.remote_instruments import RemoteInstrumentAnalyzer
+
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_GENRE_MODELS = (
@@ -102,7 +106,7 @@ class ArtistDNAEngine:
             classifiers = [HuggingFaceGenreClassifier(name, model_id) for name, model_id in model_specs]
         self.classifiers = classifiers
         self.window_seconds = window_seconds
-        self.instrument_analyzer = instrument_analyzer or LocalONNXInstrumentClassifier()
+        self.instrument_analyzer = instrument_analyzer or RemoteInstrumentAnalyzer()
 
     def _windows(self, audio: np.ndarray, sample_rate: int) -> list[tuple[float, np.ndarray]]:
         window_size = self.window_seconds * sample_rate
@@ -189,15 +193,59 @@ class ArtistDNAEngine:
         vocal = self.vocal_detector.analyze_file(path)
         singing = vocal.get("singing", {})
         instrument_enabled = bool(getattr(self.instrument_analyzer, "enabled", False))
-        instruments = self.instrument_analyzer.analyze(instrument_audio, sample_rate, top_k=8) if instrument_enabled else []
+        instruments: list[dict[str, Any]] = []
+        instrument_error: str | None = None
+        if instrument_enabled:
+            try:
+                # The existing service analyses the complete decoded track via
+                # POST /analyze, rather than the genre model's selected windows.
+                if hasattr(self.instrument_analyzer, "analyze_file"):
+                    instruments = self.instrument_analyzer.analyze_file(path)
+                else:
+                    # Keep dependency injection compatible with lightweight tests.
+                    instruments = self.instrument_analyzer.analyze(
+                        instrument_audio, sample_rate, top_k=8
+                    )
+            except Exception as exc:
+                # Instrument detection is optional: an outage must not discard
+                # the genre/vocal analysis already completed.
+                instrument_error = type(exc).__name__
+                logger.warning(
+                    "Instrument analysis unavailable (%s); returning no instrument predictions.",
+                    instrument_error,
+                    exc_info=True,
+                )
+                instruments = []
+
         instrument_analysis = {
-            "status": "experimental" if instrument_enabled else "not_enabled",
+            "status": (
+                "not_enabled" if not instrument_enabled
+                else "unavailable" if instrument_error
+                else "available"
+            ),
             "model_id": getattr(self.instrument_analyzer, "model_id", None),
             "predictions": instruments,
-            "note": "Scores are uncalibrated model outputs. This candidate was trained for isolated instruments; results on mixed full songs require validation.",
+            "note": (
+                "Les étiquettes et scores proviennent du service instruments existant. "
+                "Ils restent des sorties expérimentales à vérifier sur des morceaux complets."
+            ),
         }
         if not instrument_enabled:
-            instrument_analysis["reason"] = "Enable ARTIST_DNA_INSTRUMENTS_ENABLED=true to run the local ONNX candidate."
+            instrument_analysis["reason"] = (
+                "INSTRUMENTS_URL absent : l'analyse instrumentale est désactivée."
+            )
+        elif instrument_error:
+            instrument_analysis["reason"] = (
+                "Le service instruments n'a pas répondu correctement ; analyse instrumentale ignorée."
+            )
+
+        singing_seconds = float(singing.get("total_duration_seconds", 0) or 0)
+        voice_summary = (
+            f"Chant détecté sur environ {singing_seconds:.1f} s ; le timbre et le genre vocal ne sont pas évalués."
+            if singing_seconds > 0
+            else "Aucun segment chanté détecté ; la présence d'une voix n'est pas confirmée."
+        )
+        consensus_genres = [item["label"] for item in consensus[:3]]
         return {
             "engine": "ARTIST DNA",
             "engine_version": "0.1.0",
@@ -211,6 +259,11 @@ class ArtistDNAEngine:
                 ],
             },
             "audio": {"channels": int(audio.shape[1]), "sample_rate": int(sample_rate)},
+            # Compatibility fields consumed by ARTIST OS's existing Pro DNA catalog.
+            # Detailed evidence remains available in the structured analysis below.
+            "genres": consensus_genres,
+            "voice": voice_summary,
+            "instrumentation": instruments,
             "genre_analysis": {
                 "aggregation_note": "Scores are model outputs, not calibrated probabilities. Consensus counts distinct models sharing an exactly normalized label; windows from one model do not increase model agreement.",
                 "models": per_model,
