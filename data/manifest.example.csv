@@ -1,2 +1,2 @@
-track_id,title,artist,source_url,audio_path,license_name,license_url,rights_review_status,rights_reviewed_by,rights_review_date,genre_labels,notes
-example_track_001,Exemple fictif,Artiste fictif,https://example.org/track,data/audio/example_track_001.mp3,UNKNOWN,https://example.org/license,pending,,,rock,Exemple fictif non utilisable pour l'entraînement
+track_id,title,artist,source_url,audio_path,license_name,license_url,training_use_permission,commercial_use_permission,rights_review_status,rights_reviewed_by,rights_review_date,genre_labels,notes
+example_track_001,Exemple fictif,Artiste fictif,https://example.org/track,data/audio/example_track_001.mp3,UNKNOWN,https://example.org/license,unclear,unclear,pending,,,rock,Exemple fictif non utilisable pour l'entraînement
