@@ -312,7 +312,7 @@ class ArtistDNAEngine:
         )
         return {
             "engine": "ARTIST DNA",
-            "engine_version": "0.1.0",
+            "engine_version": "0.2.0",
             "duration_seconds": round(duration, 3),
             "analysis_sampling": {
                 "strategy": "full_track_if_at_most_30_seconds; otherwise up to eight evenly spaced 30-second windows covering the track",
