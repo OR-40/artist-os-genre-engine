@@ -11,8 +11,8 @@ Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteu
 - Permissions distinctes consignées pour l'entraînement et l'usage commercial.
 - Export séparé des seules pistes marquées approved avec les deux permissions à yes, un réviseur et une date.
 - Tests automatiques exécutés par GitHub Actions, y compris des tests de contrat de l'API locale.
-- Endpoint prototype `POST /analyze` : réponse `{ "analysis": ... }` ; formats testés à ce stade : WAV, FLAC et OGG.
-- MP3/M4A non pris en charge par l'API prototype tant qu'un décodeur dédié n'a pas été validé ; aucun déploiement ni branchement production.
+- Endpoint prototype `POST /analyze` : réponse `{ "analysis": ... }` ; format accepté à ce stade : WAV uniquement.
+- FLAC/OGG/MP3/M4A non pris en charge par l'API prototype tant qu'un décodeur dédié n'a pas été validé ; aucun déploiement ni branchement production.
 - Pas de téléchargement automatique de musique.
 - Premier inventaire de 12 morceaux enregistrés de Kevin MacLeod, avec pages officielles et licence CC BY 4.0 consignées dans `data/pilot_candidates.csv`.
 - Ces 12 pistes restent `pending` : aucun audio n'a été téléchargé et elles ne sont pas encore admises à l'entraînement/évaluation officielle.
