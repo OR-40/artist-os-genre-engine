@@ -15,7 +15,7 @@ from typing import Any, Callable
 import numpy as np
 import soundfile as sf
 
-from src.remote_instruments import RemoteInstrumentAnalyzer
+from src.instrument_classifier import LocalONNXInstrumentClassifier
 
 
 logger = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ class ArtistDNAEngine:
             classifiers = [HuggingFaceGenreClassifier(name, model_id) for name, model_id in model_specs]
         self.classifiers = classifiers
         self.window_seconds = window_seconds
-        self.instrument_analyzer = instrument_analyzer or RemoteInstrumentAnalyzer()
+        self.instrument_analyzer = instrument_analyzer or LocalONNXInstrumentClassifier(enabled=True)
 
     def _windows(self, audio: np.ndarray, sample_rate: int) -> list[tuple[float, np.ndarray]]:
         window_size = self.window_seconds * sample_rate
@@ -226,13 +226,13 @@ class ArtistDNAEngine:
             "model_id": getattr(self.instrument_analyzer, "model_id", None),
             "predictions": instruments,
             "note": (
-                "Les étiquettes et scores proviennent du service instruments existant. "
+                "Les étiquettes et scores proviennent du classifieur ONNX local exécuté sur CPU. "
                 "Ils restent des sorties expérimentales à vérifier sur des morceaux complets."
             ),
         }
         if not instrument_enabled:
             instrument_analysis["reason"] = (
-                "INSTRUMENTS_URL absent : l'analyse instrumentale est désactivée."
+                "Le classifieur ONNX local est désactivé par configuration."
             )
         elif instrument_error:
             instrument_analysis["reason"] = (
