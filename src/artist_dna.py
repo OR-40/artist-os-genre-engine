@@ -88,7 +88,7 @@ class ArtistDNAEngine:
         self,
         vocal_detector: Any,
         classifiers: list[Any] | None = None,
-        window_seconds: int = 30,
+        window_seconds: int = 10,
         instrument_analyzer: Any | None = None,
     ) -> None:
         if window_seconds < 5:
@@ -108,17 +108,16 @@ class ArtistDNAEngine:
         window_size = self.window_seconds * sample_rate
         if len(audio) == 0:
             raise ValueError("Fichier audio vide.")
-        starts = list(range(0, len(audio), window_size))
-        # Keep the final short tail only if it contains at least five seconds.
-        windows = []
-        for start in starts:
-            end = min(start + window_size, len(audio))
-            if end - start < min(5 * sample_rate, window_size):
-                continue
-            windows.append((start / sample_rate, audio[start:end]))
-        if not windows:
-            windows.append((0.0, audio))
-        return windows
+        # For short tracks, keep the complete track as one sample. For longer
+        # tracks, use three 10-second snapshots: beginning, middle, and end.
+        if len(audio) <= 3 * window_size:
+            return [(0.0, audio)]
+        last_start = len(audio) - window_size
+        starts = sorted({0, int(round(last_start / 2)), last_start})
+        return [
+            (start / sample_rate, audio[start:start + window_size])
+            for start in starts
+        ]
 
     def analyze_file(self, audio_path: str | Path) -> dict[str, Any]:
         path = Path(audio_path)
@@ -132,10 +131,13 @@ class ArtistDNAEngine:
 
         per_model: dict[str, dict[str, Any]] = {}
         model_label_scores: dict[str, dict[str, list[float]]] = {}
+        representative_windows = self._windows(mono, sample_rate)
+        # The instrument candidate receives the same selected audio as genres.
+        instrument_audio = np.concatenate([window for _, window in representative_windows])
         for classifier in self.classifiers:
             window_results = []
             all_scores: dict[str, list[float]] = defaultdict(list)
-            for start, window in self._windows(mono, sample_rate):
+            for start, window in representative_windows:
                 predictions = classifier.predict(window, sample_rate, top_k=5)
                 window_results.append({
                     "start_seconds": round(start, 3),
@@ -187,7 +189,7 @@ class ArtistDNAEngine:
         vocal = self.vocal_detector.analyze_file(path)
         singing = vocal.get("singing", {})
         instrument_enabled = bool(getattr(self.instrument_analyzer, "enabled", False))
-        instruments = self.instrument_analyzer.analyze(mono, sample_rate, top_k=8) if instrument_enabled else []
+        instruments = self.instrument_analyzer.analyze(instrument_audio, sample_rate, top_k=8) if instrument_enabled else []
         instrument_analysis = {
             "status": "experimental" if instrument_enabled else "not_enabled",
             "model_id": getattr(self.instrument_analyzer, "model_id", None),
@@ -200,6 +202,14 @@ class ArtistDNAEngine:
             "engine": "ARTIST DNA",
             "engine_version": "0.1.0",
             "duration_seconds": round(duration, 3),
+            "analysis_sampling": {
+                "strategy": "full_track_if_at_most_30_seconds; otherwise three 10-second snapshots at beginning, middle, and end",
+                "selected_audio_seconds": round(sum(len(window) for _, window in representative_windows) / sample_rate, 3),
+                "selected_windows": [
+                    {"start_seconds": round(start, 3), "duration_seconds": round(len(window) / sample_rate, 3)}
+                    for start, window in representative_windows
+                ],
+            },
             "audio": {"channels": int(audio.shape[1]), "sample_rate": int(sample_rate)},
             "genre_analysis": {
                 "aggregation_note": "Scores are model outputs, not calibrated probabilities. Consensus counts distinct models sharing an exactly normalized label; windows from one model do not increase model agreement.",
