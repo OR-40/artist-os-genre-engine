@@ -11,9 +11,9 @@ Une première passerelle isolée est disponible sur la branche `feat/artist-dna-
 - `POST /dna/analyze` combine deux candidats de classification de genres (baseline wav2vec2 et candidat AST) avec la détection vocale FireRedVAD.
 - Les deux classifieurs sont chargés à la demande. Les identifiants peuvent être remplacés avec `ARTIST_DNA_MODEL_BASELINE` et `ARTIST_DNA_MODEL_AST`.
 - Le moteur découpe l'audio en fenêtres de 30 secondes, conserve les prédictions par modèle et expose une agrégation explicite. Les scores ne sont pas présentés comme des probabilités calibrées.
-- La signature artistique reste volontairement non générée. Un adaptateur séparé appelle maintenant le service existant `artist-os-instruments` (`POST /analyze`) avec un montage WAV début/milieu/fin de 6 secondes par extrait, et normalise `predictions`. L'adaptateur reprend le contrat visible dans DNA3, mais l'appel réseau réel n'a pas encore été validé depuis ce prototype.
+- La signature artistique et l'analyse des instruments restent volontairement non connectées tant qu'une solution locale au prototype n'a pas été validée. Aucune dépendance Railway ne doit être utilisée.
 - Dépendances du moteur combiné : `python -m pip install -r requirements-dna.txt`.
-- Format d'entrée encore limité à WAV, 50 Mio maximum. Pour activer l'adaptateur d'instruments, définir `INSTRUMENTS_URL=https://artist-os-instruments-production.up.railway.app/analyze` et éventuellement `INSTRUMENTS_TIMEOUT=90`. Sans URL configurée, l'analyse des instruments est ignorée. Cette branche n'est pas déployée en production et n'est pas encore validée avec les deux poids réels ensemble.
+- Format d'entrée encore limité à WAV, 50 Mio maximum. Cette branche n'est pas déployée en production et n'est pas encore validée avec les poids réels ensemble.
 
 Ce prototype est une passerelle logicielle, pas encore une validation de qualité, de latence, de mémoire, de licences ou de capacité multi-utilisateur. Ne pas le brancher au site ARTIST OS avant la revue des poids, le test contractuel et les mesures de déploiement.
 
