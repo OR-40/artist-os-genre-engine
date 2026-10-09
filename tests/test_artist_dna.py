@@ -22,6 +22,20 @@ class FakeClassifier:
         return [{"label": label, "score": score} for label, score in self.labels]
 
 
+class WindowSensitiveClassifier:
+    name = "window_sensitive"
+    model_id = "fake/window-sensitive"
+
+    def __init__(self):
+        self.calls = 0
+
+    def predict(self, audio, sample_rate, top_k=10):
+        self.calls += 1
+        if self.calls == 2:
+            return [{"label": "classical", "score": 0.95}, {"label": "rock", "score": 0.03}]
+        return [{"label": "rock", "score": 0.72}, {"label": "classical", "score": 0.12}]
+
+
 class FakeInstrumentAnalyzer:
     enabled = True
     model_id = "fake/instruments"
@@ -94,6 +108,23 @@ class ArtistDNAEngineTests(unittest.TestCase):
         self.assertEqual([w["start_seconds"] for w in result["analysis_sampling"]["selected_windows"]], [0.0, 30.0, 60.0, 90.0])
         self.assertEqual(result["genre_analysis"]["decision_status"], "repeated_temporal_evidence")
         self.assertEqual(result["genre_analysis"]["window_top1_votes"][0]["label"], "rock")
+
+    def test_single_outlier_window_does_not_define_whole_track_genre(self):
+        long_path = Path(self.tmp.name) / "long-outlier.wav"
+        sf.write(long_path, np.zeros(120 * 16000, dtype=np.float32), 16000)
+        classifier = WindowSensitiveClassifier()
+        engine = ArtistDNAEngine(
+            FakeVocalDetector(),
+            [classifier],
+            window_seconds=30,
+            instrument_analyzer=LocalONNXInstrumentClassifier(enabled=False),
+        )
+        result = engine.analyze_file(long_path)
+        self.assertEqual(result["genres"][0], "rock")
+        self.assertNotIn("classical", result["genres"])
+        self.assertEqual(result["genre_analysis"]["decision_status"], "repeated_temporal_evidence")
+        self.assertEqual(result["artistic_analysis"]["status"], "provisional_evidence_based")
+        self.assertIn("rock", result["artistic_analysis"]["text"])
 
     def test_marks_signature_as_not_generated_instead_of_inventing(self):
         result = self.engine.analyze_file(self.audio_path)
