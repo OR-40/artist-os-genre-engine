@@ -6,7 +6,7 @@ Ce document distingue les licences publiées des autorisations effectivement val
 
 ## Nouveau lot candidat : Incompetech / Kevin MacLeod
 
-Douze enregistrements ont été inscrits dans `data/pilot_candidates.csv` comme **candidats réels**, sans téléchargement audio ni admission à l'entraînement à ce stade. Les pages individuelles indexées affichent une licence Creative Commons Attribution 4.0 (CC BY 4.0), et la page officielle destinée aux agents indique que le catalogue utilise cette licence et fournit les métadonnées de chaque piste.
+Douze enregistrements ont été inscrits dans `data/pilot_candidates.csv` comme **candidats réels**, sans téléchargement audio ni admission à l'entraînement à ce stade. Les pages individuelles indexées affichent une licence Creative Commons Attribution 4.0 (CC BY 4.0), et la page officielle destinée aux agents indique que le catalogue utilise cette licence et fournit les métadonnées de chaque piste. Pour éviter toute fausse validation, les deux champs d'autorisation (`training_use_permission` et `commercial_use_permission`) sont consignés `unclear` jusqu'à ce qu'une revue documentée confirme que la licence couvre bien l'entraînement du modèle et l'exploitation commerciale envisagée.
 
 Sources officielles :
 - Catalogue et métadonnées : https://incompetech.com/agent-section/
