@@ -1,9 +1,9 @@
 """Experimental local ONNX instrument classifier; no network inference service.
 
 Model candidate: onnx-community/Musical-Instrument-Classification-ONNX.
-Inference is opt-in via ARTIST_DNA_INSTRUMENTS_ENABLED=true. The first enabled
-analysis downloads/caches the model files from Hugging Face; inference itself
-runs locally with ONNX Runtime on CPU.
+Inference is enabled by default and can be disabled with
+ARTIST_DNA_INSTRUMENTS_ENABLED=false. The first enabled analysis downloads/caches
+the model files from Hugging Face; inference itself runs locally with ONNX Runtime on CPU.
 """
 from __future__ import annotations
 
