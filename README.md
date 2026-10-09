@@ -12,6 +12,8 @@ Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteu
 - Export séparé des seules pistes marquées approved avec les deux permissions à yes, un réviseur et une date.
 - Tests automatiques exécutés par GitHub Actions.
 - Pas de téléchargement automatique de musique.
+- Premier inventaire de 12 morceaux enregistrés de Kevin MacLeod, avec pages officielles et licence CC BY 4.0 consignées dans `data/pilot_candidates.csv`.
+- Ces 12 pistes restent `pending` : aucun audio n'a été téléchargé et elles ne sont pas encore admises à l'entraînement/évaluation officielle.
 - Pas de dataset audio réel validé pour l'entraînement.
 
 ## Environnement
