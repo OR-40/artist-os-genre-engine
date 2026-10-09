@@ -3,7 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.license_manifest import FIELDS, is_http_url, read_manifest, validate_rows, write_template
+from src.license_manifest import (
+    FIELDS, eligible_rows, is_http_url, main, read_manifest, validate_rows, write_template
+)
 
 
 def valid_row(**overrides):
@@ -15,6 +17,8 @@ def valid_row(**overrides):
         "audio_path": "data/audio/track-001.mp3",
         "license_name": "À vérifier",
         "license_url": "https://example.org/license",
+        "training_use_permission": "unclear",
+        "commercial_use_permission": "unclear",
         "rights_review_status": "pending",
         "genre_labels": "rock",
     })
@@ -55,9 +59,36 @@ class LicenseManifestTests(unittest.TestCase):
         self.assertTrue(is_http_url("http://example.org/song"))
 
     def test_approved_requires_reviewer_and_date(self):
-        errors = validate_rows([valid_row(rights_review_status="approved")])
+        errors = validate_rows([valid_row(
+            rights_review_status="approved",
+            training_use_permission="yes",
+            commercial_use_permission="yes",
+            license_name="CC0-1.0",
+        )])
         self.assertTrue(any("rights_reviewed_by" in error for error in errors))
         self.assertTrue(any("rights_review_date" in error for error in errors))
+
+    def test_approved_requires_yes_for_both_uses(self):
+        errors = validate_rows([valid_row(
+            rights_review_status="approved",
+            rights_reviewed_by="Reviewer",
+            rights_review_date="2026-10-09",
+            license_name="CC0-1.0",
+        )])
+        self.assertTrue(any("training_use_permission" in error for error in errors))
+        self.assertTrue(any("commercial_use_permission" in error for error in errors))
+
+    def test_approved_accepts_complete_human_review_record(self):
+        row = valid_row(
+            rights_review_status="approved",
+            rights_reviewed_by="Reviewer",
+            rights_review_date="2026-10-09",
+            license_name="CC0-1.0",
+            training_use_permission="yes",
+            commercial_use_permission="yes",
+        )
+        self.assertEqual(validate_rows([row]), [])
+        self.assertEqual(eligible_rows([row]), [row])
 
     def test_approved_rejects_unknown_license_name(self):
         errors = validate_rows([valid_row(
@@ -65,6 +96,8 @@ class LicenseManifestTests(unittest.TestCase):
             rights_reviewed_by="Reviewer",
             rights_review_date="2026-10-09",
             license_name="UNKNOWN",
+            training_use_permission="yes",
+            commercial_use_permission="yes",
         )])
         self.assertTrue(any("license_name" in error for error in errors))
 
@@ -72,9 +105,36 @@ class LicenseManifestTests(unittest.TestCase):
         errors = validate_rows([valid_row(rights_review_status="probably-ok")])
         self.assertTrue(any("rights_review_status" in error for error in errors))
 
+    def test_rejects_unknown_permission_value(self):
+        errors = validate_rows([valid_row(training_use_permission="maybe")])
+        self.assertTrue(any("training_use_permission" in error for error in errors))
+
     def test_non_string_cell_does_not_crash_validation(self):
         errors = validate_rows([valid_row(title=None)])
         self.assertTrue(any("title" in error for error in errors))
+
+    def test_eligibility_filter_excludes_pending_rejected_and_unclear(self):
+        approved = valid_row(
+            track_id="approved",
+            rights_review_status="approved",
+            rights_reviewed_by="Reviewer",
+            rights_review_date="2026-10-09",
+            license_name="CC0-1.0",
+            training_use_permission="yes",
+            commercial_use_permission="yes",
+        )
+        pending = valid_row(track_id="pending")
+        rejected = valid_row(track_id="rejected", rights_review_status="rejected")
+        unclear = valid_row(
+            track_id="unclear",
+            rights_review_status="approved",
+            rights_reviewed_by="Reviewer",
+            rights_review_date="2026-10-09",
+            license_name="CC0-1.0",
+            training_use_permission="yes",
+            commercial_use_permission="unclear",
+        )
+        self.assertEqual([row["track_id"] for row in eligible_rows([approved, pending, rejected, unclear])], ["approved"])
 
     def test_read_manifest_reports_missing_file(self):
         rows, errors = read_manifest(Path("file-that-should-not-exist.csv"))
@@ -115,6 +175,43 @@ class LicenseManifestTests(unittest.TestCase):
             with path.open(encoding="utf-8", newline="") as handle:
                 header = next(csv.reader(handle))
         self.assertEqual(header, FIELDS)
+
+    def test_eligible_export_writes_only_approved_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "manifest.csv"
+            output = Path(tmp) / "eligible.csv"
+            rows = [
+                valid_row(
+                    track_id="approved",
+                    rights_review_status="approved",
+                    rights_reviewed_by="Reviewer",
+                    rights_review_date="2026-10-09",
+                    license_name="CC0-1.0",
+                    training_use_permission="yes",
+                    commercial_use_permission="yes",
+                ),
+                valid_row(track_id="pending"),
+            ]
+            with source.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=FIELDS)
+                writer.writeheader()
+                writer.writerows(rows)
+            result = main(["eligible", str(source), "--output", str(output)])
+            with output.open(encoding="utf-8", newline="") as handle:
+                exported = list(csv.DictReader(handle))
+        self.assertEqual(result, 0)
+        self.assertEqual([row["track_id"] for row in exported], ["approved"])
+
+    def test_eligible_export_refuses_to_overwrite_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "manifest.csv"
+            with source.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=FIELDS)
+                writer.writeheader()
+                writer.writerow(valid_row())
+            result = main(["eligible", str(source), "--output", str(source)])
+            self.assertEqual(result, 2)
+            self.assertTrue(source.exists())
 
 
 if __name__ == "__main__":
