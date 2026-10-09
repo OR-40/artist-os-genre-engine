@@ -1,1 +1,52 @@
-# artist-os-genre-engine
+# ARTIST OS — Genre Engine
+
+Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteuse, avant toute intégration à ARTIST OS.
+
+**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** À ce stade, il contient uniquement un validateur de manifeste et ses tests. Aucun modèle de classification n'est encore validé.
+
+## État actuel
+
+- Validation de la structure du manifeste CSV à 12 colonnes.
+- Contrôles des champs obligatoires, URL HTTP(S), identifiants dupliqués et statuts de vérification des droits.
+- Tests automatiques exécutés par GitHub Actions.
+- Pas de téléchargement automatique de musique.
+- Pas de dataset audio réel validé pour l'entraînement.
+
+## Environnement
+
+Python 3.12 ou version compatible. Le validateur n'a pas de dépendance externe.
+
+Exécuter les tests :
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Créer un manifeste vierge :
+
+```bash
+python -m src.license_manifest template data/manifest.csv
+```
+
+Valider un manifeste :
+
+```bash
+python -m src.license_manifest validate data/manifest.csv
+```
+
+Le fichier `data/manifest.example.csv` est fictif. Il sert uniquement à illustrer le format et **ne constitue pas une donnée d'entraînement**.
+
+## Conditions avant toute constitution du dataset
+
+1. Vérifier la source et les droits de chaque enregistrement individuellement.
+2. Confirmer explicitement que les droits couvrent l'usage envisagé, y compris l'entraînement/évaluation d'un système et l'exploitation commerciale du service.
+3. Conserver la page source, la licence exacte, la date de vérification et la personne ayant vérifié les droits.
+4. Écarter les pistes sous licence non commerciale, les licences incertaines et toute piste sans provenance vérifiable.
+5. Ne pas contourner les conditions d'un site ni aspirer massivement ses fichiers.
+6. Ne pas considérer le statut `approved` du CSV comme une validation juridique automatique : c'est une trace de revue humaine, pas un avis juridique.
+
+## Protocole d'évaluation visé
+
+Le pilote devra d'abord utiliser un petit ensemble contrôlé de morceaux complets, avec étiquettes confirmées manuellement et diversité d'artistes. Il faudra mesurer les erreurs par genre et tester sur des artistes absents de l'ensemble de référence. Les extraits d'un même morceau ne doivent pas se retrouver à la fois dans les ensembles de référence et de test.
+
+Aucune intégration ARTIST OS ne doit être faite avant que la provenance des données, la qualité des résultats, la latence et la mémoire CPU soient documentées.
