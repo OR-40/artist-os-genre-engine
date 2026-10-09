@@ -1,13 +1,16 @@
 """FireRedVAD adapter for vocal-segment detection.
 
-The FireRedVAD package is an optional runtime dependency. This module keeps
-interval normalization independently testable without downloading model weights.
+Model weights are downloaded from the official Hugging Face repository on the
+first real inference if they are not already present locally.
 """
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
+
+FIREREDVAD_REPO_ID = "FireRedTeam/FireRedVAD"
+REQUIRED_AED_FILES = ("model.pth.tar", "cmvn.ark")
 
 
 @dataclass(frozen=True, order=True)
@@ -96,23 +99,56 @@ def normalize_result(result: Any, duration_seconds: float) -> dict[str, Any]:
 
 
 class FireRedVADDetector:
-    """Lazy-loading FireRedVAD wrapper; model weights are loaded only on first use."""
+    """Lazy-loading FireRedVAD wrapper with first-run official weight download."""
 
     def __init__(self, model_dir: str | Path, use_gpu: bool = False) -> None:
         self.model_dir = Path(model_dir)
         self.use_gpu = use_gpu
         self._model: Any = None
 
+    def _ensure_model_files(self) -> None:
+        missing = [name for name in REQUIRED_AED_FILES if not (self.model_dir / name).is_file()]
+        if not missing:
+            return
+        try:
+            from huggingface_hub import hf_hub_download
+        except ImportError as exc:
+            raise RuntimeError(
+                "huggingface_hub est requis pour télécharger les poids FireRedVAD. "
+                "Installez requirements-vocal.txt."
+            ) from exc
+
+        # local_dir is the parent so repository paths AED/<file> land exactly in model_dir.
+        self.model_dir.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            for filename in missing:
+                hf_hub_download(
+                    repo_id=FIREREDVAD_REPO_ID,
+                    filename=f"AED/{filename}",
+                    local_dir=str(self.model_dir.parent),
+                )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Téléchargement des poids officiels FireRedVAD impossible "
+                f"({FIREREDVAD_REPO_ID}/AED). Vérifier l'accès réseau à Hugging Face."
+            ) from exc
+
+        still_missing = [name for name in REQUIRED_AED_FILES if not (self.model_dir / name).is_file()]
+        if still_missing:
+            raise RuntimeError(
+                "Téléchargement FireRedVAD incomplet : fichiers absents "
+                + ", ".join(still_missing)
+            )
+
     def _load(self) -> Any:
         if self._model is not None:
             return self._model
-        if not self.model_dir.is_dir():
-            raise FileNotFoundError(f"FireRedVAD model directory not found: {self.model_dir}")
+        self._ensure_model_files()
         try:
             from fireredvad import FireRedAed, FireRedAedConfig
         except ImportError as exc:
             raise RuntimeError(
-                "FireRedVAD is not installed. Install requirements-vocal.txt first."
+                "FireRedVAD n'est pas installé. Installez requirements-vocal.txt."
             ) from exc
 
         config = FireRedAedConfig(
