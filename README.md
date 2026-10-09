@@ -4,6 +4,19 @@ Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteu
 
 **Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** Il contient un validateur de manifeste, un prototype de détection d'événements vocaux FireRedVAD et une API locale de test. Aucun modèle de classification de genres n'est encore validé.
 
+## Moteur ARTIST DNA — prototype d'orchestration
+
+Une première passerelle isolée est disponible sur la branche `feat/artist-dna-orchestrator` :
+
+- `POST /dna/analyze` combine deux candidats de classification de genres (baseline wav2vec2 et candidat AST) avec la détection vocale FireRedVAD.
+- Les deux classifieurs sont chargés à la demande. Les identifiants peuvent être remplacés avec `ARTIST_DNA_MODEL_BASELINE` et `ARTIST_DNA_MODEL_AST`.
+- Le moteur découpe l'audio en fenêtres de 30 secondes, conserve les prédictions par modèle et expose une agrégation explicite. Les scores ne sont pas présentés comme des probabilités calibrées.
+- La sortie marque volontairement la signature artistique comme non générée et les instruments comme non connectés : ces conclusions exigent encore des composants validés.
+- Dépendances du moteur combiné : `python -m pip install -r requirements-dna.txt`.
+- Format d'entrée encore limité à WAV, 50 Mio maximum. Cette branche n'est pas déployée en production et n'est pas encore validée avec les deux poids réels ensemble.
+
+Ce prototype est une passerelle logicielle, pas encore une validation de qualité, de latence, de mémoire, de licences ou de capacité multi-utilisateur. Ne pas le brancher au site ARTIST OS avant la revue des poids, le test contractuel et les mesures de déploiement.
+
 ## État actuel
 
 - Validation de la structure du manifeste CSV à 14 colonnes.
