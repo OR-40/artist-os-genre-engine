@@ -14,9 +14,9 @@ Une première passerelle isolée est disponible sur la branche `feat/artist-dna-
 - La signature artistique reste volontairement non générée. Un candidat d'analyse des instruments fonctionne en local via ONNX Runtime CPU : `onnx-community/Musical-Instrument-Classification-ONNX`, fichier quantifié `onnx/model_q4.onnx` (environ 90 Mo sur la fiche du modèle). Il est désactivé par défaut et ne se lance qu'avec `ARTIST_DNA_INSTRUMENTS_ENABLED=true`. Au premier lancement activé, les poids sont téléchargés depuis Hugging Face puis mis en cache ; l'inférence est locale, sans service HTTP externe.
 - Le classifieur teste jusqu'à six extraits de 3 secondes répartis dans le morceau. Ses sorties sont expérimentales : le modèle est documenté comme entraîné sur des instruments isolés, et sa fiche avertit que les mélanges peuvent être incertains. La précision, la latence CPU et la mémoire sur nos chansons ne sont pas encore mesurées. Aucune dépendance Railway ne doit être utilisée.
 - Dépendances du moteur combiné : `python -m pip install -r requirements-dna.txt`.
-- Le test isolé du modèle d'instruments ne nécessite ni FireRedVAD ni PyTorch : `python -m pip install -r requirements-instruments.txt`. Depuis la racine du dépôt, exécuter `python -m src.benchmark_instruments /chemin/vers/ta-chanson.wav`. Le rapport mesure séparément le téléchargement/chargement initial et le temps d'analyse, et donne la mémoire maximale du processus quand le système la fournit.
+- L'API MP3 nécessite l'exécutable système FFmpeg pour le décodage temporaire ; les tests de contrat simulent ce décodage. Le test isolé du modèle d'instruments ne nécessite ni FireRedVAD ni PyTorch : `python -m pip install -r requirements-instruments.txt`. Depuis la racine du dépôt, exécuter `python -m src.benchmark_instruments /chemin/vers/ta-chanson.wav`. Le rapport mesure séparément le téléchargement/chargement initial et le temps d'analyse, et donne la mémoire maximale du processus quand le système la fournit.
 - Pour activer ce candidat dans l'orchestrateur ARTIST DNA : définir `ARTIST_DNA_INSTRUMENTS_ENABLED=true`. Laisser cette variable absente ou à `false` pour ne pas télécharger/charger le modèle.
-- Format d'entrée encore limité à WAV, 50 Mio maximum. Cette branche n'est pas déployée en production et n'est pas encore validée avec les poids réels ensemble.
+- Entrée utilisateur limitée au MP3, 50 Mio maximum. FFmpeg doit être installé côté serveur : le MP3 est décodé temporairement en WAV PCM mono 16 kHz pour les composants audio ; le WAV temporaire est supprimé à la fin de la requête. Cette branche n'est pas déployée en production et n'est pas encore validée avec les poids réels ensemble.
 
 Ce prototype est une passerelle logicielle, pas encore une validation de qualité, de latence, de mémoire, de licences ou de capacité multi-utilisateur. Ne pas le brancher au site ARTIST OS avant la revue des poids, le test contractuel et les mesures de déploiement.
 
@@ -27,8 +27,8 @@ Ce prototype est une passerelle logicielle, pas encore une validation de qualit�
 - Permissions distinctes consignées pour l'entraînement et l'usage commercial.
 - Export séparé des seules pistes marquées approved avec les deux permissions à yes, un réviseur et une date.
 - Tests automatiques exécutés par GitHub Actions, y compris des tests de contrat de l'API locale.
-- Endpoint prototype `POST /analyze` : réponse `{ "analysis": ... }` ; format accepté à ce stade : WAV uniquement.
-- FLAC/OGG/MP3/M4A non pris en charge par l'API prototype tant qu'un décodeur dédié n'a pas été validé ; aucun déploiement ni branchement production.
+- Endpoint prototype `POST /analyze` : réponse `{ "analysis": ... }` ; format accepté : MP3 uniquement (50 Mio maximum), décodé en WAV PCM mono 16 kHz temporaire avec FFmpeg.
+- WAV/FLAC/OGG/M4A refusés à l'entrée : seul le MP3 est accepté. Le décodage interne dépend de l'exécutable FFmpeg disponible sur le serveur ; aucun déploiement ni branchement production.
 - Pas de téléchargement automatique de musique.
 - Premier inventaire de 12 morceaux enregistrés de Kevin MacLeod, avec pages officielles et licence CC BY 4.0 consignées dans `data/pilot_candidates.csv`.
 - Ces 12 pistes restent `pending` : aucun audio n'a été téléchargé et elles ne sont pas encore admises à l'entraînement/évaluation officielle.
