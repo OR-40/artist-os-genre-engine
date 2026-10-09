@@ -1,5 +1,5 @@
 # Lightweight CI dependencies; intentionally excludes FireRedVAD and model weights.
-fastapi>=0.115,<1
+fastapi>=0.115,<0.120
 python-multipart>=0.0.9
 httpx>=0.27,<1
 soundfile>=0.12,<1
