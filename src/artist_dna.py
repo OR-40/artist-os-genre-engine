@@ -94,11 +94,11 @@ class ArtistDNAEngine:
         self,
         vocal_detector: Any,
         classifiers: list[Any] | None = None,
-        window_seconds: int = 10,
+        window_seconds: int = 30,
         instrument_analyzer: Any | None = None,
     ) -> None:
-        if window_seconds < 5:
-            raise ValueError("window_seconds must be at least 5")
+        if window_seconds < 10:
+            raise ValueError("window_seconds must be at least 10")
         self.vocal_detector = vocal_detector
         if classifiers is None:
             model_specs = [
@@ -118,15 +118,18 @@ class ArtistDNAEngine:
         self.instrument_analyzer = instrument_analyzer or LocalONNXInstrumentClassifier()
 
     def _windows(self, audio: np.ndarray, sample_rate: int) -> list[tuple[float, np.ndarray]]:
+        """Sample 30-second excerpts across the complete track, not just three snapshots."""
         window_size = self.window_seconds * sample_rate
         if len(audio) == 0:
             raise ValueError("Fichier audio vide.")
-        # For short tracks, keep the complete track as one sample. For longer
-        # tracks, use three 10-second snapshots: beginning, middle, and end.
-        if len(audio) <= 3 * window_size:
+        if len(audio) <= window_size:
             return [(0.0, audio)]
         last_start = len(audio) - window_size
-        starts = sorted({0, int(round(last_start / 2)), last_start})
+        # Up to eight evenly distributed windows cover the beginning, middle,
+        # transitions and ending. The classifier was trained on 30-second clips;
+        # ten-second snapshots are a mismatched input for this baseline.
+        count = min(8, max(2, int(np.ceil(len(audio) / window_size))))
+        starts = sorted({int(round(value)) for value in np.linspace(0, last_start, count)})
         return [
             (start / sample_rate, audio[start:start + window_size])
             for start in starts
@@ -151,10 +154,11 @@ class ArtistDNAEngine:
             window_results = []
             all_scores: dict[str, list[float]] = defaultdict(list)
             for start, window in representative_windows:
-                predictions = classifier.predict(window, sample_rate, top_k=5)
+                predictions = classifier.predict(window, sample_rate, top_k=10)
                 window_results.append({
                     "start_seconds": round(start, 3),
                     "predictions": predictions,
+                    "top1": predictions[0]["label"] if predictions else None,
                 })
                 for prediction in predictions:
                     label = prediction["label"]
@@ -225,17 +229,31 @@ class ArtistDNAEngine:
                 )
                 instruments = []
 
+        # The ONNX model's published training is single-instrument clips, not
+        # full polyphonic mixes. Keep raw candidates for diagnostics, but only
+        # expose an instrument as a compatibility result when both its score and
+        # its temporal recurrence pass conservative thresholds.
+        confirmed_instruments = [
+            item for item in instruments
+            if float(item.get("confidence", 0.0) or 0.0) >= 0.35
+            and int(item.get("top1_windows", 0) or 0) >= max(
+                2, int(np.ceil(int(item.get("windows_analyzed", 0) or 0) * 0.5))
+            )
+        ]
         instrument_analysis = {
             "status": (
                 "not_enabled" if not instrument_enabled
                 else "unavailable" if instrument_error
-                else "experimental"
+                else "experimental_mix_generalization_unvalidated"
             ),
             "model_id": getattr(self.instrument_analyzer, "model_id", None),
             "predictions": instruments,
+            "confirmed_predictions": confirmed_instruments,
             "note": (
-                "Prédictions du classifieur ONNX local, exécuté sur CPU sur des extraits représentatifs. "
-                "Les scores restent expérimentaux et doivent être vérifiés sur des morceaux complets."
+                "Le modèle est entraîné sur des extraits centrés sur un seul instrument, "
+                "pas sur des mixages complets. Les candidats bruts ne sont pas des instruments "
+                "confirmés dans le morceau. Seuls les résultats récurrents avec score >= 0,35 "
+                "sont exposés dans le champ instrumentation."
             ),
         }
         if not instrument_enabled:
@@ -253,13 +271,50 @@ class ArtistDNAEngine:
             if singing_seconds > 0
             else "Aucun segment chanté détecté ; la présence d'une voix n'est pas confirmée."
         )
-        consensus_genres = [item["label"] for item in consensus[:3]]
+        # A genre is promoted to the compatibility output only when it wins
+        # repeatedly across independent time windows. One anomalous intro/outro
+        # window must not define the entire song's genre.
+        vote_counts: dict[str, int] = defaultdict(int)
+        vote_score_totals: dict[str, list[float]] = defaultdict(list)
+        vote_windows = 0
+        for model_data in per_model.values():
+            for window_result in model_data["windows"]:
+                predictions = window_result["predictions"]
+                if not predictions:
+                    continue
+                vote_windows += 1
+                vote_counts[_normal_label(predictions[0]["label"])] += 1
+                vote_score_totals[_normal_label(predictions[0]["label"])].append(
+                    float(predictions[0]["score"])
+                )
+        required_votes = max(2, int(np.ceil(vote_windows * 0.20))) if vote_windows > 1 else 1
+        vote_ranking = sorted(
+            (
+                {
+                    "label": label,
+                    "top1_windows": count,
+                    "windows_total": vote_windows,
+                    "mean_top1_score": round(float(np.mean(vote_score_totals[label])), 4),
+                }
+                for label, count in vote_counts.items()
+            ),
+            key=lambda item: (item["top1_windows"], item["mean_top1_score"]),
+            reverse=True,
+        )
+        stable_genres = [item["label"] for item in vote_ranking if item["top1_windows"] >= required_votes]
+        if not stable_genres and vote_ranking:
+            stable_genres = [vote_ranking[0]["label"]]
+        consensus_genres = stable_genres[:3]
+        genre_decision_status = (
+            "repeated_temporal_evidence" if vote_ranking and vote_ranking[0]["top1_windows"] >= required_votes
+            else "low_temporal_evidence"
+        )
         return {
             "engine": "ARTIST DNA",
             "engine_version": "0.1.0",
             "duration_seconds": round(duration, 3),
             "analysis_sampling": {
-                "strategy": "full_track_if_at_most_30_seconds; otherwise three 10-second snapshots at beginning, middle, and end",
+                "strategy": "full_track_if_at_most_30_seconds; otherwise up to eight evenly spaced 30-second windows covering the track",
                 "selected_audio_seconds": round(sum(len(window) for _, window in representative_windows) / sample_rate, 3),
                 "selected_windows": [
                     {"start_seconds": round(start, 3), "duration_seconds": round(len(window) / sample_rate, 3)}
@@ -271,11 +326,14 @@ class ArtistDNAEngine:
             # Detailed evidence remains available in the structured analysis below.
             "genres": consensus_genres,
             "voice": voice_summary,
-            "instrumentation": instruments,
+            "instrumentation": confirmed_instruments,
             "genre_analysis": {
-                "aggregation_note": "Scores are model outputs, not calibrated probabilities. Consensus counts distinct models sharing an exactly normalized label; windows from one model do not increase model agreement.",
+                "aggregation_note": "Scores are model outputs, not calibrated probabilities. Genre output is based on repeated top-1 votes across full-track 30-second windows; isolated window predictions are retained as evidence but do not alone determine the track genre.",
                 "models": per_model,
                 "label_consensus": consensus[:10],
+                "window_top1_votes": vote_ranking,
+                "decision_status": genre_decision_status,
+                "minimum_repeated_window_votes": required_votes,
             },
             "vocal_analysis": {
                 "model": vocal.get("model", "FireRedVAD"),
@@ -285,7 +343,11 @@ class ArtistDNAEngine:
             },
             "artistic_signature": {
                 "status": "not_generated",
-                "reason": "A descriptive artistic signature requires validated musical evidence and must not be inferred from genre scores alone.",
+                "reason": "La signature artistique attend encore un modèle de sous-genres, de timbre vocal et d'instrumentation polyphonique validé. Aucun texte artistique ne doit être fabriqué à partir de prédictions instables.",
+            },
+            "artistic_analysis": {
+                "status": "evidence_insufficient_for_commercial_summary",
+                "text": "L'analyse automatique a relevé des indices de genre et des événements vocaux, mais le système ne rédige pas encore de signature artistique définitive : les modèles d'instruments et de genre n'ont pas été validés sur des mixages complets comparables. Les résultats bruts sont conservés pour audit.",
             },
             "instrument_analysis": instrument_analysis,
         }
