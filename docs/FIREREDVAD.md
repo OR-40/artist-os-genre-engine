@@ -1,84 +1,59 @@
-# FireRedVAD — vocal-event detection prototype
+# FireRedVAD — ARTIST DNA prototype
 
-This module is an isolated prototype for detecting singing/vocal event timestamps. A local FastAPI wrapper is available for testing; neither is connected to the ARTIST OS production site.
+This module is an isolated prototype for detecting singing, speech and music events. The FastAPI wrapper and the combined ARTIST DNA engine are not connected to the production ARTIST OS site.
 
-## Environment
+## One-time environment setup
 
-The existing manifest validator remains lightweight. Install the optional runtime
-only in a dedicated environment:
-
-```bash
-python -m pip install -r requirements-vocal.txt
-```
-
-Download the official FireRedVAD model files separately and point the detector at
-the local directory containing the AED model files (including `model.pth.tar` and
-`cmvn.ark`). The model is lazy-loaded on the first analysis request.
-
-## API locale (prototype)
-
-Installer les dépendances de l'API et du modèle dans un environnement dédié :
+Run in the repository root:
 
 ```bash
-python -m pip install -r requirements-api.txt
+python -m pip install -r requirements-dna.txt
 ```
 
-Définir `FIREREDVAD_MODEL_DIR` vers le dossier `AED` du modèle téléchargé, puis démarrer l'API :
+This installs the API, FireRedVAD and genre-classification dependencies. The API requires FFmpeg to decode MP3 files to temporary mono 16 kHz PCM WAV files.
+
+## Model weights
+
+On the first real inference, `FireRedVADDetector` downloads the two required AED files (`AED/model.pth.tar` and `AED/cmvn.ark`) from the official `FireRedTeam/FireRedVAD` Hugging Face repository if they are not already present. The files are small (approximately 2.4 MB each). Genre models are loaded from Hugging Face by Transformers on the first full ARTIST DNA request. Instrument classification is disabled by default because it is experimental on mixed songs.
+
+Optional environment settings:
 
 ```bash
-export FIREREDVAD_MODEL_DIR=/path/to/pretrained_models/FireRedVAD/AED
-uvicorn app:app --host 127.0.0.1 --port 8000
+export FIREREDVAD_MODEL_DIR=weights/FireRedVAD/AED
+export FIREREDVAD_USE_GPU=false
 ```
 
-L'endpoint `POST /analyze` attend un fichier multipart nommé `file` et renvoie `{"analysis": ...}`. `GET /health` vérifie la configuration sans charger les poids. Limite d'upload : 50 Mio.
+## Real MP3 smoke test
 
-Seul le WAV est accepté par l'API de test pour l'instant, car c'est le format réellement utilisé lors du test du modèle. FLAC, OGG, MP3 et M4A sont refusés jusqu'à validation du décodage par le modèle lui-même. L'API n'a ni authentification ni limitation de débit : ne pas l'exposer publiquement ni la connecter à ARTIST OS en production.
+Place a rights-cleared MP3 in the repository or pass its absolute path. The test exercises the actual API and reports elapsed time.
 
-## Python use
-
-```python
-from src.vocal_detection import FireRedVADDetector
-
-detector = FireRedVADDetector(
-    model_dir="/path/to/pretrained_models/FireRedVAD/AED",
-    use_gpu=False,
-)
-result = detector.analyze_file("/path/to/song.wav")
-print(result["singing"]["segments"])
-```
-
-The JSON-compatible result contains duration and normalized timestamp segments for
-`singing`, `speech`, and `music`. Ratios are descriptive model outputs, not
-probabilities that a song contains vocals. Singing intervals must be checked against
-listening before treating them as ground truth.
-
-## Test de bout en bout avec le vrai modèle
-
-Ce test charge les poids FireRedVAD et envoie un WAV réel à l'endpoint FastAPI via le client HTTP de test. Il mesure le temps total, vérifie le contrat JSON et affiche le nombre de segments détectés. Il ne téléverse aucun fichier vers un service distant.
-
-Dans l'environnement où le modèle et le fichier audio existent déjà :
+FireRedVAD only:
 
 ```bash
-python -m pip install -r requirements-api.txt
-python scripts/smoke_test_real_api.py \
-  --audio /path/to/artist_os_test.wav \
-  --model-dir /path/to/pretrained_models/FireRedVAD/AED
+python scripts/smoke_test_real_api.py --audio "/path/to/song.mp3"
 ```
 
-Ajouter `--gpu` uniquement si PyTorch/CUDA et le modèle sont configurés pour GPU. Le premier appel inclut le chargement du modèle ; consigner ce temps séparément d'une mesure à chaud si l'objectif est la latence répétée. Vérifier ensuite les segments en écoutant les passages correspondants : le test automatique ne juge pas la justesse musicale.
+Full ARTIST DNA (two genre candidates plus FireRedVAD):
 
-## Tests
+```bash
+python scripts/smoke_test_real_api.py --audio "/path/to/song.mp3" --dna
+```
 
-The unit tests exercise interval sorting, overlap merging, duration clamping,
-invalid values, and result normalization without importing FireRedVAD or downloading
-weights:
+The first full ARTIST DNA request downloads and loads the genre models, so its cold-start time includes those downloads. Subsequent requests in the same process reuse the loaded models. The current genre candidates are experimental; their scores are model outputs, not calibrated probabilities, and the artistic signature is intentionally not generated from genre scores alone.
+
+## API contract
+
+- `POST /analyze`: FireRedVAD vocal-event analysis.
+- `POST /dna/analyze`: combined ARTIST DNA analysis.
+- Both endpoints accept an MP3 multipart field named `file`, enforce a 50 MiB upload limit and return `{"analysis": ...}`.
+- `GET /health` checks configuration without loading model weights.
+- The WAV produced from MP3 is temporary and is deleted after the request.
+- The prototype has no authentication or rate limiting. Do not expose it publicly or connect it to production.
+
+## Unit tests
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-The inference test must be run separately on a locally available, rights-cleared
-audio file and the exact model snapshot. Record model revision, Python/package
-versions, CPU/GPU, cold-start time, inference time, and human review of detected
-segments. Do not connect this prototype to production until repeatable tests and
-license/dependency review are complete.
+Unit tests use fake models for contract logic and do not validate real model quality. Real inference must be checked separately, including listening to detected vocal segments and reviewing genre predictions before using them as evidence about an artist.
