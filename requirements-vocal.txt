@@ -1,0 +1,4 @@
+# Optional dependency set for vocal-event detection; kept separate from the lightweight manifest validator.
+fireredvad==0.0.2
+soundfile>=0.12,<1
+huggingface_hub>=0.25,<2

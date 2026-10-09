@@ -19,5 +19,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - name: Installer les dépendances de test API légères
+        run: python -m pip install -r requirements-test-api.txt
       - name: Exécuter les tests unitaires
         run: python -m unittest discover -s tests -v

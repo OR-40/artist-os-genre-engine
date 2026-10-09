@@ -1,0 +1,6 @@
+# API/test dependencies only; the manifest validator remains dependency-free.
+-r requirements-vocal.txt
+fastapi>=0.115,<0.120
+uvicorn>=0.30,<1
+python-multipart>=0.0.9
+httpx>=0.27,<1

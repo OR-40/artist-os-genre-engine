@@ -1,0 +1,9 @@
+# Optional dependencies for the isolated ARTIST DNA orchestration API.
+# Keep separate from the lightweight manifest and FireRedVAD-only environment.
+-r requirements-api.txt
+transformers>=4.45,<5
+torch>=2.2
+scipy>=1.10
+numpy>=1.26,<3
+onnxruntime>=1.20,<2
+huggingface_hub>=0.25,<2

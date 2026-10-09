@@ -2,15 +2,24 @@
 
 Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteuse, avant toute intégration à ARTIST OS.
 
-**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** À ce stade, il contient un validateur de manifeste et ses tests. Aucun modèle de classification n'est encore validé.
+**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** Il contient un validateur de manifeste, un prototype de détection d'événements vocaux FireRedVAD et une API locale de test. Aucun modèle de classification de genres n'est encore validé.
 
-## État actuel
+## Moteur ARTIST DNA — prototype d'orchestration
 
-- Validation de la structure du manifeste CSV à 14 colonnes.
-- Contrôles des champs obligatoires, URL HTTP(S), identifiants dupliqués et statuts de revue.
-- Permissions distinctes consignées pour l'entraînement et l'usage commercial.
-- Export séparé des seules pistes marquées approved avec les deux permissions à yes, un réviseur et une date.
-- Tests automatiques exécutés par GitHub Actions.
+Le moteur CPU isolé est en cours de validation sur la branche `fix/local-cpu-dna-fire-ast-onnx` :
+
+- `POST /dna/analyze` combine deux candidats de classification de genres (baseline wav2vec2 et candidat AST) avec la détection vocale FireRedVAD.
+- Les deux classifieurs sont chargés à la demande. Les identifiants peuvent être remplacés avec `ARTIST_DNA_MODEL_BASELINE` et `ARTIST_DNA_MODEL_AST`.
+- Pour la classification des genres, le moteur utilise la piste entière si elle dure au plus 30 secondes ; sinon, il sélectionne trois fenêtres de 10 secondes au début, au milieu et à la fin (30 secondes au total). Le candidat ONNX reçoit le même audio sélectionné. Les scores ne sont pas présentés comme des probabilités calibrées. Cette stratégie accélère l'analyse mais peut manquer un instrument ou un changement présent ailleurs dans le morceau.
+- L'analyse instrumentale par défaut utilise `src/instrument_classifier.py` : modèle ONNX quantifié `onnx-community/Musical-Instrument-Classification-ONNX`, exécution locale via `CPUExecutionProvider`, jusqu'à six extraits de 3 secondes. Le fichier ONNX quantifié fait environ 90 Mo et est téléchargé depuis Hugging Face au premier usage, puis mis en cache.
+- `ARTIST_DNA_INSTRUMENTS_ENABLED=true` active l'analyse ONNX par défaut ; définir explicitement `false` permet de la désactiver. Aucun service distant d'instruments ni variable `INSTRUMENTS_URL` n'est requis par défaut.
+- La signature artistique reste volontairement non générée tant que les preuves musicales ne suffisent pas. Les prédictions d'instruments sont expérimentales : le modèle cible neuf catégories et peut confondre des instruments dans un mix complet.
+- Les deux classifieurs de genres restent actifs : baseline wav2vec2 et candidat AST, tous deux exécutés sur CPU via Transformers (`device=-1`). Le modèle AST compte environ 86,5 millions de paramètres ; la latence et la mémoire doivent être mesurées sur l'hébergement cible avant toute mise en production.
+- Si l'analyse ONNX échoue, l'orchestrateur conserve l'analyse des genres et de la voix, et signale l'analyse instrumentale comme indisponible. Les erreurs sont journalisées sans inclure le contenu audio.
+- `src/remote_instruments.py` reste disponible pour les tests et une compatibilité explicite, mais n'est plus utilisé par défaut.
+- Le pipeline complet est défini par `requirements-dna.txt`. L'API MP3 nécessite l'exécutable système FFmpeg pour le décodage temporaire ; les tests de contrat simulent ce décodage.
+- Endpoint prototype `POST /analyze` : réponse `{ "analysis": ... }`. Endpoint orchestrateur `POST /dna/analyze` : champ multipart `audio` (alias `file` conservé pour tests directs) et réponse `{ "ok": true, "dna": ... }`, compatible avec le proxy `/api/dna3` existant dans ARTIST OS. Les deux acceptent un MP3 de 50 Mio maximum, décodé en WAV PCM mono 16 kHz temporaire avec FFmpeg.
+- WAV/FLAC/OGG/M4A refusés à l'entrée : seul le MP3 est accepté. Le décodage interne dépend de l'exécutable FFmpeg disponible sur le serveur ; aucun déploiement ni branchement production.
 - Pas de téléchargement automatique de musique.
 - Premier inventaire de 12 morceaux enregistrés de Kevin MacLeod, avec pages officielles et licence CC BY 4.0 consignées dans `data/pilot_candidates.csv`.
 - Ces 12 pistes restent `pending` : aucun audio n'a été téléchargé et elles ne sont pas encore admises à l'entraînement/évaluation officielle.
@@ -19,6 +28,12 @@ Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteu
 ## Environnement
 
 Python 3.12 ou version compatible. Le validateur n'a pas de dépendance externe.
+
+Installer les dépendances légères de test (sans télécharger FireRedVAD ni ses poids) :
+
+```bash
+python -m pip install -r requirements-test-api.txt
+```
 
 Exécuter les tests :
 
