@@ -1,0 +1,1 @@
+# Aucune dépendance externe nécessaire pour le validateur initial.
