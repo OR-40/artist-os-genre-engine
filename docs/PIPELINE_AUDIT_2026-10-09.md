@@ -23,7 +23,7 @@
 - FireRedVAD n'identifie pas le timbre vocal. Une analyse fiable du registre/timbre nécessiterait un modèle spécifique, idéalement sur une voix isolée ou une séparation vocale validée.
 - Les deux modèles de genres n'annoncent que dix genres larges : ils ne suffisent pas à établir un sous-genre précis.
 - Les licences affichées sur les poids ne prouvent pas à elles seules que les droits sur les jeux de données et les modèles de base couvrent un service commercial. Ce point reste bloquant avant commercialisation.
-- GitHub Actions n'a retourné aucun résultat de test pour cette PR à l'heure de cet audit. Les tests de contrat ajoutés ne doivent pas être présentés comme exécutés tant qu'un résultat de CI n'est pas visible.
+- GitHub Actions a exécuté avec succès les tests unitaires et de contrat sur le commit de cette branche : 64 tests passés. Cette suite n'effectue pas de téléchargement ni d'inférence des modèles et ne constitue donc pas une validation audio réelle.
 
 ## Référence des modèles
 
