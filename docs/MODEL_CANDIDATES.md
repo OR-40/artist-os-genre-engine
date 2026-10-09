@@ -24,9 +24,18 @@ Ces modèles sont des **candidats de test uniquement**. Leur licence publiée ne
 - Intérêt : candidat à comparer pour les mélanges de genres.
 - Limites : modèle relativement volumineux pour un service CPU ; la provenance/licence du dataset de mashups et les droits du modèle de base doivent être examinés avant tout usage commercial. Les performances revendiquées doivent être reproduites sur notre propre jeu de test.
 
+## Candidat C — AST avec artefacts Transformers standard
+
+- Modèle : https://huggingface.co/Koras1k/ast-megafinetuned-gtzan-v2-0.97score
+- Licence affichée sur la fiche : BSD-3-Clause.
+- Artefacts observés sur la fiche : `config.json`, `model.safetensors`, `preprocessor_config.json`. Le chargeur Transformers générique est documenté.
+- Base de données annoncée : GTZAN ; la fiche indique une entrée de 10 secondes et rapporte 97 % d'accuracy sur son évaluation GTZAN.
+- Intérêt : permet de réintroduire AST dans le pipeline sans le checkpoint précédent `neerajs7/AST-audio-classifier`, qui ne contient pas la configuration standard requise.
+- Limites : score auto-déclaré sur GTZAN, seulement dix genres larges, pas de sous-genres ; aucune validation indépendante sur les chansons ARTIST OS. La licence affichée du checkpoint ne suffit pas à établir les droits commerciaux de l'ensemble des données d'entraînement et des modèles de base.
+
 ## Décision technique provisoire
 
-1. Commencer par le candidat A comme baseline, puis comparer le candidat B sur les mêmes fichiers si l'environnement le permet.
+1. Comparer le candidat A (baseline wav2vec2) et le candidat C (AST compatible Transformers) sur les mêmes fichiers, avec les fenêtres d'entrée propres à chaque modèle. Le candidat B reste exclu du chargement automatique tant que ses artefacts ne sont pas compatibles.
 2. Utiliser les modèles uniquement en inférence pour cette première comparaison : pas de fine-tuning, pas de constitution de corpus d'entraînement à partir des pistes Incompetech.
 3. Ne pas traiter les sorties du modèle comme vérité terrain. Deux personnes doivent confirmer les étiquettes de référence à l'écoute, en conservant les désaccords.
 4. Tester des morceaux complets et des fenêtres réparties dans le temps ; agréger les prédictions sans laisser un seul court passage décider du genre global.
