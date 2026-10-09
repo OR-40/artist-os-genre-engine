@@ -79,10 +79,21 @@ class VocalAnalysisApiTests(unittest.TestCase):
             with patch("app.decode_mp3_to_wav", side_effect=fake_decode_mp3_to_wav):
                 response = client.post(
                     "/dna/analyze",
-                    files={"file": ("sample.mp3", b"mocked MP3 payload", "audio/mpeg")},
+                    files={"audio": ("sample.mp3", b"mocked MP3 payload", "audio/mpeg")},
                 )
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.json()["analysis"]["engine"], "ARTIST DNA")
+            self.assertTrue(response.json()["ok"])
+            self.assertEqual(response.json()["dna"]["engine"], "ARTIST DNA")
+        finally:
+            client.close()
+
+    def test_dna_endpoint_rejects_missing_audio(self):
+        app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine())
+        client = TestClient(app)
+        try:
+            response = client.post("/dna/analyze")
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json()["detail"], "Fichier audio manquant.")
         finally:
             client.close()
 
