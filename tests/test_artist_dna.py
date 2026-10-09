@@ -60,7 +60,7 @@ class ArtistDNAEngineTests(unittest.TestCase):
         self.engine = ArtistDNAEngine(
             FakeVocalDetector(),
             [self.a, self.b],
-            window_seconds=10,
+            window_seconds=30,
             instrument_analyzer=FakeInstrumentAnalyzer(),
         )
 
@@ -85,13 +85,15 @@ class ArtistDNAEngineTests(unittest.TestCase):
         self.assertEqual(self.a.calls, 1)
         self.assertEqual(self.b.calls, 1)
 
-    def test_long_song_uses_three_representative_windows(self):
+    def test_long_song_uses_full_track_coverage_in_30_second_windows(self):
         long_path = Path(self.tmp.name) / "long.wav"
         sf.write(long_path, np.zeros(120 * 16000, dtype=np.float32), 16000)
         result = self.engine.analyze_file(long_path)
-        self.assertEqual(result["analysis_sampling"]["selected_audio_seconds"], 30.0)
-        self.assertEqual(len(result["analysis_sampling"]["selected_windows"]), 3)
-        self.assertEqual([w["start_seconds"] for w in result["analysis_sampling"]["selected_windows"]], [0.0, 55.0, 110.0])
+        self.assertEqual(result["analysis_sampling"]["selected_audio_seconds"], 120.0)
+        self.assertEqual(len(result["analysis_sampling"]["selected_windows"]), 4)
+        self.assertEqual([w["start_seconds"] for w in result["analysis_sampling"]["selected_windows"]], [0.0, 30.0, 60.0, 90.0])
+        self.assertEqual(result["genre_analysis"]["decision_status"], "repeated_temporal_evidence")
+        self.assertEqual(result["genre_analysis"]["window_top1_votes"][0]["label"], "rock")
 
     def test_marks_signature_as_not_generated_instead_of_inventing(self):
         result = self.engine.analyze_file(self.audio_path)
