@@ -1,0 +1,2 @@
+track_id,audio_path,genre_labels,license,license_url,source_url,review_status
+example_track_001,data/audio/example_track_001.mp3,rock,UNKNOWN,https://example.org/license,https://example.org/track,pending
