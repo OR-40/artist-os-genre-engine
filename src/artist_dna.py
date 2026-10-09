@@ -127,7 +127,7 @@ class ArtistDNAEngine:
         duration = len(mono) / sample_rate
 
         per_model: dict[str, dict[str, Any]] = {}
-        label_scores: dict[str, list[float]] = defaultdict(list)
+        model_label_scores: dict[str, dict[str, list[float]]] = {}
         for classifier in self.classifiers:
             window_results = []
             all_scores: dict[str, list[float]] = defaultdict(list)
@@ -140,7 +140,9 @@ class ArtistDNAEngine:
                 for prediction in predictions:
                     label = prediction["label"]
                     all_scores[label].append(float(prediction["score"]))
-                    label_scores[_normal_label(label)].append(float(prediction["score"]))
+            model_label_scores[classifier.name] = {
+                _normal_label(label): scores for label, scores in all_scores.items()
+            }
             ranked = sorted(
                 (
                     {"label": label, "mean_score": round(sum(scores) / len(scores), 4),
@@ -157,14 +159,24 @@ class ArtistDNAEngine:
                 "windows": window_results,
             }
 
-        # Exact normalized label agreement only; no semantic synonym guessing.
+        # Consensus counts distinct models, not repeated windows from the same model.
+        # Labels are matched only after conservative text normalization.
+        label_by_model: dict[str, list[float]] = defaultdict(list)
+        for model_name, scores_by_label in model_label_scores.items():
+            for label, scores in scores_by_label.items():
+                if scores:
+                    label_by_model[label].append(sum(scores) / len(scores))
         consensus = sorted(
             (
-                {"label": label, "mean_score_across_model_windows": round(sum(scores) / len(scores), 4),
-                 "observations": len(scores)}
-                for label, scores in label_scores.items()
+                {
+                    "label": label,
+                    "mean_score_across_models": round(sum(scores) / len(scores), 4),
+                    "models_agreeing": len(scores),
+                    "model_count": len(self.classifiers),
+                }
+                for label, scores in label_by_model.items()
             ),
-            key=lambda item: (item["observations"], item["mean_score_across_model_windows"]),
+            key=lambda item: (item["models_agreeing"], item["mean_score_across_models"]),
             reverse=True,
         )
 
@@ -176,7 +188,7 @@ class ArtistDNAEngine:
             "duration_seconds": round(duration, 3),
             "audio": {"channels": int(audio.shape[1]), "sample_rate": int(sample_rate)},
             "genre_analysis": {
-                "aggregation_note": "Scores are model outputs, not calibrated probabilities. Consensus matches exact normalized labels only.",
+                "aggregation_note": "Scores are model outputs, not calibrated probabilities. Consensus counts distinct models sharing an exactly normalized label; windows from one model do not increase model agreement.",
                 "models": per_model,
                 "label_consensus": consensus[:10],
             },
