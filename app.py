@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from src.vocal_detection import FireRedVADDetector
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-ALLOWED_SUFFIXES = {".wav", ".flac", ".ogg"}
+ALLOWED_SUFFIXES = {".wav"}
 
 
 def create_app(detector: Any | None = None) -> FastAPI:
@@ -51,7 +51,7 @@ def create_app(detector: Any | None = None) -> FastAPI:
         if suffix not in ALLOWED_SUFFIXES:
             raise HTTPException(
                 status_code=415,
-                detail="Format non pris en charge pour ce prototype. Utiliser WAV, FLAC ou OGG.",
+                detail="Format non pris en charge pour ce prototype. Utiliser WAV.",
             )
 
         payload = await file.read(MAX_UPLOAD_BYTES + 1)
