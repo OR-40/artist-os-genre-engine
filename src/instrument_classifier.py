@@ -58,7 +58,7 @@ class LocalONNXInstrumentClassifier:
         labels: dict[int, str] | None = None,
     ) -> None:
         self.enabled = (
-            os.getenv("ARTIST_DNA_INSTRUMENTS_ENABLED", "false").strip().lower() == "true"
+            os.getenv("ARTIST_DNA_INSTRUMENTS_ENABLED", "true").strip().lower() == "true"
             if enabled is None else enabled
         )
         if max_segments < 1:
