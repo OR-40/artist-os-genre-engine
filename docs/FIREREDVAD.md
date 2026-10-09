@@ -14,7 +14,7 @@ This installs the API, FireRedVAD and genre-classification dependencies. The API
 
 ## Model weights
 
-On the first real inference, `FireRedVADDetector` downloads the two required AED files (`AED/model.pth.tar` and `AED/cmvn.ark`) from the official `FireRedTeam/FireRedVAD` Hugging Face repository if they are not already present. The files are small (approximately 2.4 MB each). Genre models are loaded from Hugging Face by Transformers on the first full ARTIST DNA request. Instrument classification is disabled by default because it is experimental on mixed songs.
+On the first real inference, `FireRedVADDetector` downloads the two required AED files (`AED/model.pth.tar` and `AED/cmvn.ark`) from the official `FireRedTeam/FireRedVAD` Hugging Face repository if they are not already present. The AED checkpoint is approximately 2.37 MB; the CMVN file is approximately 1.31 kB. Genre models are loaded from Hugging Face by Transformers on the first full ARTIST DNA request. Instrument classification is disabled by default because it is experimental on mixed songs.
 
 Optional environment settings:
 
