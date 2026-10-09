@@ -1,7 +1,8 @@
 """Validation conservatrice d'un manifeste de provenance/licence audio.
 
 Ce module ne télécharge pas d'audio et ne décide pas si une licence autorise
-juridiquement un usage donné. La validation des droits reste humaine.
+juridiquement un usage donné. Les permissions sont des attestations humaines :
+elles doivent être vérifiées à partir des documents applicables.
 """
 from __future__ import annotations
 
@@ -19,6 +20,8 @@ FIELDS = [
     "audio_path",
     "license_name",
     "license_url",
+    "training_use_permission",
+    "commercial_use_permission",
     "rights_review_status",
     "rights_reviewed_by",
     "rights_review_date",
@@ -26,6 +29,7 @@ FIELDS = [
     "notes",
 ]
 STATUSES = {"pending", "approved", "rejected"}
+PERMISSIONS = {"yes", "no", "unclear"}
 URL_FIELDS = ("source_url", "license_url")
 REQUIRED_FIELDS = (
     "track_id",
@@ -34,6 +38,8 @@ REQUIRED_FIELDS = (
     "audio_path",
     "license_name",
     "license_url",
+    "training_use_permission",
+    "commercial_use_permission",
     "rights_review_status",
     "genre_labels",
 )
@@ -80,6 +86,13 @@ def validate_rows(rows: list[dict[str, str]]) -> list[str]:
                 f"ligne {row_number}: rights_review_status doit être l'un de {', '.join(sorted(STATUSES))}"
             )
 
+        for field in ("training_use_permission", "commercial_use_permission"):
+            permission = _text(row.get(field)).lower()
+            if permission and permission not in PERMISSIONS:
+                errors.append(
+                    f"ligne {row_number}: {field} doit être l'un de {', '.join(sorted(PERMISSIONS))}"
+                )
+
         if status == "approved":
             if _text(row.get("license_name")).upper() in {"UNKNOWN", "À VÉRIFIER", "A VERIFIER"}:
                 errors.append(
@@ -90,8 +103,26 @@ def validate_rows(rows: list[dict[str, str]]) -> list[str]:
                     errors.append(
                         f"ligne {row_number}: {field} obligatoire lorsque rights_review_status=approved"
                     )
+            for field in ("training_use_permission", "commercial_use_permission"):
+                if _text(row.get(field)).lower() != "yes":
+                    errors.append(
+                        f"ligne {row_number}: {field} doit être 'yes' lorsque rights_review_status=approved"
+                    )
 
     return errors
+
+
+def eligible_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Retourne uniquement les lignes explicitement approuvées pour les deux usages."""
+    return [
+        row for row in rows
+        if _text(row.get("rights_review_status")).lower() == "approved"
+        and _text(row.get("training_use_permission")).lower() == "yes"
+        and _text(row.get("commercial_use_permission")).lower() == "yes"
+        and bool(_text(row.get("rights_reviewed_by")))
+        and bool(_text(row.get("rights_review_date")))
+        and _text(row.get("license_name")).upper() not in {"", "UNKNOWN", "À VÉRIFIER", "A VERIFIER"}
+    ]
 
 
 def read_manifest(path: Path) -> tuple[list[dict[str, str]], list[str]]:
@@ -139,6 +170,12 @@ def main(argv: list[str] | None = None) -> int:
     validate_parser = subparsers.add_parser("validate", help="valider un manifeste CSV")
     validate_parser.add_argument("path", type=Path)
 
+    eligible_parser = subparsers.add_parser(
+        "eligible", help="exporter les pistes approuvées pour entraînement et usage commercial"
+    )
+    eligible_parser.add_argument("path", type=Path)
+    eligible_parser.add_argument("--output", type=Path, required=True)
+
     args = parser.parse_args(argv)
     if args.command == "template":
         try:
@@ -156,6 +193,24 @@ def main(argv: list[str] | None = None) -> int:
         for error in errors:
             print(f"- {error}")
         return 1
+
+    if args.command == "eligible":
+        try:
+            if args.path.resolve() == args.output.resolve():
+                print("ERREUR: le fichier de sortie doit être différent du manifeste source", file=sys.stderr)
+                return 2
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            selected = eligible_rows(rows)
+            with args.output.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=FIELDS)
+                writer.writeheader()
+                writer.writerows(selected)
+        except OSError as exc:
+            print(f"ERREUR: export impossible: {exc}", file=sys.stderr)
+            return 2
+        print(f"Export terminé : {len(selected)} piste(s) admissible(s) sur {len(rows)}")
+        print("La sélection repose sur les permissions consignées par la revue humaine ; elle ne constitue pas un avis juridique.")
+        return 0
 
     approved = sum(_text(row.get("rights_review_status")).lower() == "approved" for row in rows)
     pending = sum(_text(row.get("rights_review_status")).lower() == "pending" for row in rows)
