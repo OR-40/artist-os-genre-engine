@@ -14,6 +14,8 @@ from typing import Any, Callable
 import numpy as np
 import soundfile as sf
 
+from src.instruments_service import InstrumentsService
+
 
 DEFAULT_GENRE_MODELS = (
     ("genre_baseline", "dima806/music_genres_classification"),
@@ -87,6 +89,7 @@ class ArtistDNAEngine:
         vocal_detector: Any,
         classifiers: list[Any] | None = None,
         window_seconds: int = 30,
+        instrument_analyzer: Any | None = None,
     ) -> None:
         if window_seconds < 5:
             raise ValueError("window_seconds must be at least 5")
@@ -99,6 +102,7 @@ class ArtistDNAEngine:
             classifiers = [HuggingFaceGenreClassifier(name, model_id) for name, model_id in model_specs]
         self.classifiers = classifiers
         self.window_seconds = window_seconds
+        self.instrument_analyzer = instrument_analyzer or InstrumentsService()
 
     def _windows(self, audio: np.ndarray, sample_rate: int) -> list[tuple[float, np.ndarray]]:
         window_size = self.window_seconds * sample_rate
@@ -182,6 +186,8 @@ class ArtistDNAEngine:
 
         vocal = self.vocal_detector.analyze_file(path)
         singing = vocal.get("singing", {})
+        instruments = self.instrument_analyzer.analyze(mono, sample_rate, top_k=8)
+        instruments_url = getattr(self.instrument_analyzer, "url", "")
         return {
             "engine": "ARTIST DNA",
             "engine_version": "0.1.0",
@@ -203,7 +209,9 @@ class ArtistDNAEngine:
                 "reason": "A descriptive artistic signature requires validated musical evidence and must not be inferred from genre scores alone.",
             },
             "instrument_analysis": {
-                "status": "not_connected",
-                "reason": "The existing instrument-classifier service requires a separately validated adapter and contract.",
+                "status": "configured" if instruments_url else "not_configured",
+                "predictions": instruments,
+                "source": "artist-os-instruments /analyze",
+                "note": "An empty list can mean no predictions or a service error; inspect service logs before treating it as a negative detection.",
             },
         }
