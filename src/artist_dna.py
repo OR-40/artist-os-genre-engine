@@ -221,7 +221,7 @@ class ArtistDNAEngine:
             "status": (
                 "not_enabled" if not instrument_enabled
                 else "unavailable" if instrument_error
-                else "available"
+                else "experimental"
             ),
             "model_id": getattr(self.instrument_analyzer, "model_id", None),
             "predictions": instruments,
