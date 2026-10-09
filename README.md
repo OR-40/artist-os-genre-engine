@@ -4,15 +4,20 @@ Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteu
 
 **Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** Il contient un validateur de manifeste, un prototype de détection d'événements vocaux FireRedVAD et une API locale de test. Aucun modèle de classification de genres n'est encore validé.
 
-## État actuel
+## Moteur ARTIST DNA — prototype d'orchestration
 
-- Validation de la structure du manifeste CSV à 14 colonnes.
-- Contrôles des champs obligatoires, URL HTTP(S), identifiants dupliqués et statuts de revue.
-- Permissions distinctes consignées pour l'entraînement et l'usage commercial.
-- Export séparé des seules pistes marquées approved avec les deux permissions à yes, un réviseur et une date.
-- Tests automatiques exécutés par GitHub Actions, y compris des tests de contrat de l'API locale.
-- Endpoint prototype `POST /analyze` : réponse `{ "analysis": ... }` ; format accepté à ce stade : WAV uniquement.
-- FLAC/OGG/MP3/M4A non pris en charge par l'API prototype tant qu'un décodeur dédié n'a pas été validé ; aucun déploiement ni branchement production.
+Une première passerelle isolée est disponible sur la branche `feat/artist-dna-orchestrator` :
+
+- `POST /dna/analyze` combine deux candidats de classification de genres (baseline wav2vec2 et candidat AST) avec la détection vocale FireRedVAD.
+- Les deux classifieurs sont chargés à la demande. Les identifiants peuvent être remplacés avec `ARTIST_DNA_MODEL_BASELINE` et `ARTIST_DNA_MODEL_AST`.
+- Pour la classification des genres, le moteur utilise la piste entière si elle dure au plus 30 secondes ; sinon, il sélectionne trois fenêtres de 10 secondes au début, au milieu et à la fin (30 secondes au total). Le candidat ONNX reçoit le même audio sélectionné. Les scores ne sont pas présentés comme des probabilités calibrées. Cette stratégie accélère l'analyse mais peut manquer un instrument ou un changement présent ailleurs dans le morceau.
+- La signature artistique reste volontairement non générée tant que les preuves musicales ne suffisent pas. Pour l'instrumentation, l'orchestrateur peut appeler le service existant du dépôt `OR-40/artist-os-instruments` via `INSTRUMENTS_URL` (URL de base ou URL complète terminant par `/analyze`). Le contrat vérifié dans `server.js` est `POST /analyze`, multipart `audio`, réponse JSON `{ "ok": true, "model": "...", "predictions": [{ "label": "...", "score": 0, "maxScore": 0, "occurrences": 0 }] }`.
+- Si `INSTRUMENTS_URL` est absent, l'analyse instrumentale reste désactivée et renvoie `[]`. Si le service échoue ou renvoie un contrat inattendu, l'orchestrateur journalise l'erreur, renvoie `[]` pour les instruments et conserve l'analyse des genres et de la voix. Le délai de lecture HTTP par défaut est de 240 secondes et peut être ajusté via `INSTRUMENTS_TIMEOUT_SECONDS` ; ce délai n'est pas une garantie de durée totale. Le service analyse toutes les fenêtres de 3 secondes du morceau, donc la latence réelle doit être mesurée sur des titres complets.
+- **Sécurité avant production :** le `server.js` actuel du service instruments ne montre pas de contrôle d'authentification. Ne pas y envoyer de morceaux privés/non publiés tant que l'accès au service n'est pas restreint ou protégé.
+- Le module local `src/instrument_classifier.py` reste un candidat expérimental distinct ; il n'est plus le chemin par défaut de l'orchestrateur. Son test isolé est possible sans FireRedVAD ni PyTorch avec `python -m pip install -r requirements-instruments.txt`, puis `python -m src.benchmark_instruments /chemin/vers/ta-chanson.wav`.
+- Dépendances du moteur combiné : `python -m pip install -r requirements-dna.txt`. L'API MP3 nécessite l'exécutable système FFmpeg pour le décodage temporaire ; les tests de contrat simulent ce décodage.
+- Endpoint prototype `POST /analyze` : réponse `{ "analysis": ... }`. Endpoint orchestrateur `POST /dna/analyze` : champ multipart `audio` (alias `file` conservé pour tests directs) et réponse `{ "ok": true, "dna": ... }`, compatible avec le proxy `/api/dna3` existant dans ARTIST OS. Les deux acceptent un MP3 de 50 Mio maximum, décodé en WAV PCM mono 16 kHz temporaire avec FFmpeg.
+- WAV/FLAC/OGG/M4A refusés à l'entrée : seul le MP3 est accepté. Le décodage interne dépend de l'exécutable FFmpeg disponible sur le serveur ; aucun déploiement ni branchement production.
 - Pas de téléchargement automatique de musique.
 - Premier inventaire de 12 morceaux enregistrés de Kevin MacLeod, avec pages officielles et licence CC BY 4.0 consignées dans `data/pilot_candidates.csv`.
 - Ces 12 pistes restent `pending` : aucun audio n'a été téléchargé et elles ne sont pas encore admises à l'entraînement/évaluation officielle.
