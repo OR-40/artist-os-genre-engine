@@ -214,5 +214,17 @@ class LicenseManifestTests(unittest.TestCase):
             self.assertTrue(source.exists())
 
 
+    def test_real_music_pilot_candidates_manifest_is_structurally_valid_and_pending(self):
+        path = Path("data/pilot_candidates.csv")
+        rows, read_errors = read_manifest(path)
+        self.assertEqual(read_errors, [])
+        self.assertEqual(validate_rows(rows), [])
+        self.assertEqual(len(rows), 12)
+        self.assertTrue(all(row["rights_review_status"] == "pending" for row in rows))
+        self.assertTrue(all(row["training_use_permission"] == "yes" for row in rows))
+        self.assertTrue(all(row["commercial_use_permission"] == "yes" for row in rows))
+        self.assertEqual(len({row["track_id"] for row in rows}), len(rows))
+
+
 if __name__ == "__main__":
     unittest.main()
