@@ -6,7 +6,7 @@ Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteu
 
 ## Moteur ARTIST DNA — prototype d'orchestration
 
-Le moteur CPU isolé est en cours de validation sur la branche `fix/local-cpu-dna-fire-ast-onnx` :
+Le moteur CPU isolé est en cours de correction et de validation sur la branche `fix/full-track-dna-evidence-20261009` :
 
 - `POST /dna/analyze` combine la baseline de genres `dima806/music_genres_classification`, la détection d'événements vocaux FireRedVAD et le candidat instrumental ONNX local.
 - Deux candidats de genres sont maintenant configurés : la baseline `dima806/music_genres_classification` (fenêtres de 30 s) et un AST compatible avec le chargeur Transformers, `Koras1k/ast-megafinetuned-gtzan-v2-0.97score` (fenêtres de 10 s). Le checkpoint `neerajs7/AST-audio-classifier` a été écarté du chargement automatique car son dépôt ne fournit pas la configuration standard requise.
