@@ -108,6 +108,7 @@ class ArtistDNAEngineTests(unittest.TestCase):
         )
         self.assertEqual(engine.classifiers[0].window_seconds, 30)
         self.assertEqual(engine.classifiers[1].window_seconds, 10)
+        self.assertEqual(engine.classifiers[1].max_windows, 24)
         self.assertEqual(
             engine.classifiers[1].model_id,
             "Koras1k/ast-megafinetuned-gtzan-v2-0.97score",
