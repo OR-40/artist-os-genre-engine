@@ -157,9 +157,9 @@ class ArtistDNAEngine:
         if len(audio) <= window_size:
             return [(0.0, audio)]
         last_start = len(audio) - window_size
-        # Up to eight evenly distributed windows cover the beginning, middle,
-        # transitions and ending. Each classifier receives the input duration
-        # documented for its checkpoint (30 s baseline, 10 s AST).
+        # Evenly distributed windows cover the beginning, middle, transitions
+        # and ending. Each classifier receives its documented input duration;
+        # max_windows controls the CPU/runtime budget per model.
         count = min(max(2, int(max_windows)), max(2, int(np.ceil(len(audio) / window_size))))
         starts = sorted({int(round(value)) for value in np.linspace(0, last_start, count)})
         return [
