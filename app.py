@@ -14,13 +14,14 @@ import soundfile as sf
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 
+from src.artist_dna import ArtistDNAEngine
 from src.vocal_detection import FireRedVADDetector
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 ALLOWED_SUFFIXES = {".wav"}
 
 
-def create_app(detector: Any | None = None) -> FastAPI:
+def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> FastAPI:
     app = FastAPI(title="ARTIST OS Genre Engine", version="0.1.0")
     model_dir = Path(os.environ.get("FIREREDVAD_MODEL_DIR", "weights/FireRedVAD/AED"))
     app.state.detector = detector or FireRedVADDetector(
@@ -28,6 +29,7 @@ def create_app(detector: Any | None = None) -> FastAPI:
         use_gpu=os.environ.get("FIREREDVAD_USE_GPU", "false").lower() == "true",
     )
     app.state.model_dir = model_dir
+    app.state.dna_engine = dna_engine or ArtistDNAEngine(vocal_detector=app.state.detector)
 
     @app.get("/")
     def root() -> dict[str, str]:
@@ -86,6 +88,38 @@ def create_app(detector: Any | None = None) -> FastAPI:
         except OSError as exc:
             raise HTTPException(status_code=500, detail="Impossible de traiter le fichier temporaire.") from exc
 
+        return JSONResponse(content={"analysis": analysis})
+
+
+    @app.post("/dna/analyze")
+    async def analyze_artist_dna(request: Request, file: UploadFile = File(...)) -> JSONResponse:
+        filename = Path(file.filename or "").name
+        if Path(filename).suffix.lower() not in ALLOWED_SUFFIXES:
+            raise HTTPException(status_code=415, detail="Format non pris en charge. Utiliser WAV.")
+        payload = await file.read(MAX_UPLOAD_BYTES + 1)
+        await file.close()
+        if not payload:
+            raise HTTPException(status_code=400, detail="Fichier audio vide.")
+        if len(payload) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Fichier supérieur à la limite de 50 Mio.")
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as temp:
+                temp.write(payload)
+                temp.flush()
+                info = sf.info(temp.name)
+                if info.frames <= 0 or info.samplerate <= 0:
+                    raise HTTPException(status_code=400, detail="Fichier audio invalide.")
+                analysis = request.app.state.dna_engine.analyze_file(temp.name)
+        except HTTPException:
+            raise
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=503, detail="Fichier audio ou poids de modèle introuvables.") from exc
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Fichier audio invalide.") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail="Échec d'un composant d'analyse ARTIST DNA.") from exc
         return JSONResponse(content={"analysis": analysis})
 
     return app
