@@ -5,6 +5,7 @@ configuration is included. Keep it behind a trusted boundary during testing.
 """
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import tempfile
@@ -17,6 +18,8 @@ from fastapi.responses import JSONResponse
 
 from src.artist_dna import ArtistDNAEngine
 from src.vocal_detection import FireRedVADDetector
+
+logger = logging.getLogger("artist_os_genre_engine")
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 ALLOWED_SUFFIXES = {".mp3"}
@@ -144,6 +147,9 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
         except OSError as exc:
             raise HTTPException(status_code=500, detail="Impossible de traiter le fichier audio temporaire.") from exc
         except Exception as exc:
+            # Keep client-facing errors generic, but retain the real traceback in
+            # server logs so real-model smoke tests can identify the failing component.
+            logger.exception("Échec d'un composant d'analyse ARTIST DNA (%s)", type(exc).__name__)
             raise HTTPException(status_code=502, detail="Échec d'un composant d'analyse ARTIST DNA.") from exc
         return JSONResponse(content={"analysis": analysis})
 
