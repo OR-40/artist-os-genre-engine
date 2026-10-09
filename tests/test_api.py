@@ -9,6 +9,11 @@ from fastapi.testclient import TestClient
 from app import create_app
 
 
+class FakeDNAEngine:
+    def analyze_file(self, path):
+        return {"engine": "ARTIST DNA", "genre_analysis": {"models": {}}, "vocal_analysis": {}}
+
+
 class FakeDetector:
     def analyze_file(self, path):
         return {
@@ -53,6 +58,19 @@ class VocalAnalysisApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["analysis"]["model"], "FireRedVAD")
         self.assertEqual(response.json()["analysis"]["duration_seconds"], 1.0)
+
+    def test_dna_endpoint_returns_combined_analysis_contract(self):
+        app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine())
+        client = TestClient(app)
+        try:
+            response = client.post(
+                "/dna/analyze",
+                files={"file": ("sample.wav", make_wav(), "audio/wav")},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["analysis"]["engine"], "ARTIST DNA")
+        finally:
+            client.close()
 
     def test_rejects_flac_until_real_model_decoder_is_validated(self):
         response = self.client.post(
