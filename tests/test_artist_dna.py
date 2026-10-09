@@ -147,7 +147,7 @@ class ArtistDNAEngineTests(unittest.TestCase):
         self.assertEqual(result["instrument_analysis"]["predictions"], [])
         self.assertEqual(result["genre_analysis"]["label_consensus"][0]["label"], "rock")
         self.assertEqual(result["genres"][0], "rock")
-        self.assertEqual(set(result["genres"]), {"rock", "metal", "pop"})
+        self.assertEqual(result["genres"], ["rock"])
         self.assertIn("genre vocal ne sont pas évalués", result["voice"])
         self.assertEqual(result["instrumentation"], [])
 
