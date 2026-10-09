@@ -104,6 +104,7 @@ class ArtistDNAEngineTests(unittest.TestCase):
     def test_combines_two_genre_candidates_and_vocal_detection(self):
         result = self.engine.analyze_file(self.audio_path)
         self.assertEqual(result["engine"], "ARTIST DNA")
+        self.assertEqual(result["engine_version"], "0.2.0")
         self.assertEqual(set(result["genre_analysis"]["models"]), {"candidate_a", "candidate_b"})
         self.assertEqual(result["vocal_analysis"]["model"], "FireRedVAD")
         self.assertEqual(result["vocal_analysis"]["singing"]["total_duration_seconds"], 3.0)
