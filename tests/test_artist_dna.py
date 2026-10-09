@@ -44,6 +44,20 @@ class FakeInstrumentAnalyzer:
         return [{"name": "Electric Guitar", "confidence": 0.7, "top1_windows": 2, "windows_analyzed": 3, "role": ""}]
 
 
+class LowConfidenceInstrumentAnalyzer:
+    enabled = True
+    model_id = "fake/single-instrument-model"
+
+    def analyze_file(self, path):
+        return [{
+            "name": "Violin",
+            "confidence": 0.2082,
+            "top1_windows": 4,
+            "windows_analyzed": 6,
+            "role": "",
+        }]
+
+
 class FailingInstrumentAnalyzer:
     enabled = True
     model_id = "fake/remote-instruments"
@@ -156,6 +170,18 @@ class ArtistDNAEngineTests(unittest.TestCase):
         self.assertEqual(result["genres"][0], "rock")
         self.assertEqual(result["instrumentation"][0]["name"], "Electric Guitar")
         self.assertIn("genre vocal ne sont pas évalués", result["voice"])
+
+    def test_weak_violin_candidate_is_not_promoted_to_confirmed_instrumentation(self):
+        engine = ArtistDNAEngine(
+            FakeVocalDetector(),
+            [self.a, self.b],
+            window_seconds=30,
+            instrument_analyzer=LowConfidenceInstrumentAnalyzer(),
+        )
+        result = engine.analyze_file(self.audio_path)
+        self.assertEqual(result["instrumentation"], [])
+        self.assertEqual(result["instrument_analysis"]["predictions"][0]["name"], "Violin")
+        self.assertEqual(result["instrument_analysis"]["confirmed_predictions"], [])
 
     def test_disabled_instrument_candidate_does_not_run_model(self):
         engine = ArtistDNAEngine(
