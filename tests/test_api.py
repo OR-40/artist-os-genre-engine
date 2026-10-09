@@ -60,6 +60,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["model"], "FireRedVAD")
+        self.assertEqual(response.json()["execution_device"], "CPU")
         self.assertEqual(response.json()["supported_formats"], [".mp3"])
 
     def test_analyze_mp3_returns_analysis_envelope(self):
