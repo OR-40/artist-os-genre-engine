@@ -16,6 +16,11 @@ class FakeDNAEngine:
         return {"engine": "ARTIST DNA", "genre_analysis": {"models": {}}, "vocal_analysis": {}}
 
 
+class ExplodingDNAEngine:
+    def analyze_file(self, path):
+        raise TypeError("diagnostic test failure")
+
+
 class FakeDetector:
     def analyze_file(self, path):
         assert Path(path).suffix == ".wav"
@@ -78,6 +83,22 @@ class VocalAnalysisApiTests(unittest.TestCase):
                 )
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["analysis"]["engine"], "ARTIST DNA")
+        finally:
+            client.close()
+
+    def test_dna_inference_failure_is_logged_and_returns_generic_502(self):
+        app = create_app(detector=FakeDetector(), dna_engine=ExplodingDNAEngine())
+        client = TestClient(app)
+        try:
+            with patch("app.decode_mp3_to_wav", side_effect=fake_decode_mp3_to_wav):
+                with self.assertLogs("artist_os_genre_engine", level="ERROR") as captured:
+                    response = client.post(
+                        "/dna/analyze",
+                        files={"file": ("sample.mp3", b"mocked MP3 payload", "audio/mpeg")},
+                    )
+            self.assertEqual(response.status_code, 502)
+            self.assertIn("diagnostic test failure", "\\n".join(captured.output))
+            self.assertIn("Échec d'un composant d'analyse ARTIST DNA", response.text)
         finally:
             client.close()
 
