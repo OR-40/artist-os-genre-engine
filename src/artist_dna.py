@@ -47,10 +47,17 @@ def _normal_label(label: str) -> str:
 class HuggingFaceGenreClassifier:
     """Lazy Hugging Face audio-classification adapter for one candidate model."""
 
-    def __init__(self, name: str, model_id: str, window_seconds: int = 30) -> None:
+    def __init__(
+        self,
+        name: str,
+        model_id: str,
+        window_seconds: int = 30,
+        max_windows: int = 8,
+    ) -> None:
         self.name = name
         self.model_id = model_id
         self.window_seconds = window_seconds
+        self.max_windows = max_windows
         self._pipeline: Any = None
         self._sample_rate: int | None = None
 
@@ -109,6 +116,7 @@ class ArtistDNAEngine:
                     "genre_baseline",
                     os.getenv("ARTIST_DNA_MODEL_BASELINE", DEFAULT_GENRE_MODELS[0][1]),
                     30,
+                    8,
                 ),
             ]
             # Use a published AST checkpoint with config.json/model.safetensors.
@@ -119,10 +127,16 @@ class ArtistDNAEngine:
                     "genre_ast",
                     os.getenv("ARTIST_DNA_MODEL_AST", DEFAULT_GENRE_MODELS[1][1]),
                     10,
+                    24,
                 ))
             classifiers = [
-                HuggingFaceGenreClassifier(name, model_id, window_seconds=window_seconds)
-                for name, model_id, window_seconds in model_specs
+                HuggingFaceGenreClassifier(
+                    name,
+                    model_id,
+                    window_seconds=window_seconds,
+                    max_windows=max_windows,
+                )
+                for name, model_id, window_seconds, max_windows in model_specs
             ]
         self.classifiers = classifiers
         self.window_seconds = window_seconds
@@ -133,6 +147,7 @@ class ArtistDNAEngine:
         audio: np.ndarray,
         sample_rate: int,
         window_seconds: int | None = None,
+        max_windows: int = 8,
     ) -> list[tuple[float, np.ndarray]]:
         """Sample evenly spaced windows across the complete track."""
         window_seconds = int(window_seconds or self.window_seconds)
@@ -145,7 +160,7 @@ class ArtistDNAEngine:
         # Up to eight evenly distributed windows cover the beginning, middle,
         # transitions and ending. Each classifier receives the input duration
         # documented for its checkpoint (30 s baseline, 10 s AST).
-        count = min(8, max(2, int(np.ceil(len(audio) / window_size))))
+        count = min(max(2, int(max_windows)), max(2, int(np.ceil(len(audio) / window_size))))
         starts = sorted({int(round(value)) for value in np.linspace(0, last_start, count)})
         return [
             (start / sample_rate, audio[start:start + window_size])
@@ -174,6 +189,7 @@ class ArtistDNAEngine:
                 mono,
                 sample_rate,
                 getattr(classifier, "window_seconds", self.window_seconds),
+                getattr(classifier, "max_windows", 8),
             )
             for start, window in classifier_windows:
                 predictions = classifier.predict(window, sample_rate, top_k=10)
@@ -201,6 +217,7 @@ class ArtistDNAEngine:
                 "model_id": getattr(classifier, "model_id", None),
                 "window_count": len(window_results),
                 "window_seconds": int(getattr(classifier, "window_seconds", self.window_seconds)),
+                "max_windows": int(getattr(classifier, "max_windows", 8)),
                 "selected_windows": [
                     {"start_seconds": round(start, 3), "duration_seconds": round(len(window) / sample_rate, 3)}
                     for start, window in classifier_windows
