@@ -16,6 +16,7 @@ import numpy as np
 import soundfile as sf
 
 from src.instrument_classifier import LocalONNXInstrumentClassifier
+from src.artistic_report import build_artistic_report
 
 
 logger = logging.getLogger(__name__)
@@ -345,9 +346,12 @@ class ArtistDNAEngine:
                 "status": "not_generated",
                 "reason": "La signature artistique attend encore un modèle de sous-genres, de timbre vocal et d'instrumentation polyphonique validé. Aucun texte artistique ne doit être fabriqué à partir de prédictions instables.",
             },
-            "artistic_analysis": {
-                "status": "evidence_insufficient_for_commercial_summary",
-                "text": "L'analyse automatique a relevé des indices de genre et des événements vocaux, mais le système ne rédige pas encore de signature artistique définitive : les modèles d'instruments et de genre n'ont pas été validés sur des mixages complets comparables. Les résultats bruts sont conservés pour audit.",
-            },
+            "artistic_analysis": build_artistic_report(
+                consensus_genres,
+                genre_decision_status,
+                singing,
+                confirmed_instruments,
+                duration,
+            ),
             "instrument_analysis": instrument_analysis,
         }
