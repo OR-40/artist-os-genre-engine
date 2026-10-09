@@ -71,10 +71,20 @@ def main() -> int:
         return 1
 
     payload = response.json()
-    if not isinstance(payload, dict) or not isinstance(payload.get("analysis"), dict):
-        print("FAIL: response does not match {'analysis': {...}} contract")
-        return 1
-    analysis = payload["analysis"]
+    if args.dna:
+        if (
+            not isinstance(payload, dict)
+            or payload.get("ok") is not True
+            or not isinstance(payload.get("dna"), dict)
+        ):
+            print("FAIL: response does not match {'ok': true, 'dna': {...}} contract")
+            return 1
+        analysis = payload["dna"]
+    else:
+        if not isinstance(payload, dict) or not isinstance(payload.get("analysis"), dict):
+            print("FAIL: response does not match {'analysis': {...}} contract")
+            return 1
+        analysis = payload["analysis"]
 
     if args.dna:
         required = ("genre_analysis", "vocal_analysis", "instrument_analysis", "analysis_sampling")
