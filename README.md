@@ -48,6 +48,10 @@ L'export est un garde-fou de workflow, pas une décision juridique. Il ne vérif
 
 Le fichier data/manifest.example.csv est fictif. Il sert uniquement à illustrer le format et **ne constitue pas une donnée d'entraînement**.
 
+## Candidats de modèles
+
+Deux modèles sont documentés pour une comparaison d'inférence, sans entraînement ni intégration en production : voir [docs/MODEL_CANDIDATES.md](docs/MODEL_CANDIDATES.md). Leurs licences de poids ne constituent pas une validation des droits sur leurs données d'entraînement ; aucune décision de production n'est prise avant revue juridique et tests sur des morceaux autorisés.
+
 ## Conditions avant toute constitution du dataset
 
 1. Vérifier la source et les droits de chaque enregistrement individuellement.
