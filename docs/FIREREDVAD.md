@@ -1,7 +1,6 @@
 # FireRedVAD — vocal-event detection prototype
 
-This module is an isolated prototype for detecting singing/vocal event timestamps.
-It is not yet connected to a web API or to the ARTIST OS production site.
+This module is an isolated prototype for detecting singing/vocal event timestamps. A local FastAPI wrapper is available for testing; neither is connected to the ARTIST OS production site.
 
 ## Environment
 
@@ -33,7 +32,7 @@ uvicorn app:app --host 127.0.0.1 --port 8000
 
 L'endpoint `POST /analyze` attend un fichier multipart nommé `file` et renvoie `{"analysis": ...}`. `GET /health` vérifie la configuration sans charger les poids. Limite d'upload : 50 Mio.
 
-Formats acceptés par cette première version : WAV, FLAC et OGG, car ils sont validés via SoundFile. MP3 et M4A sont volontairement refusés jusqu'à validation d'un décodeur explicite. L'API n'a ni authentification ni limitation de débit : ne pas l'exposer publiquement ni la connecter à ARTIST OS en production.
+Seul le WAV est accepté par l'API de test pour l'instant, car c'est le format réellement utilisé lors du test du modèle. FLAC, OGG, MP3 et M4A sont refusés jusqu'à validation du décodage par le modèle lui-même. L'API n'a ni authentification ni limitation de débit : ne pas l'exposer publiquement ni la connecter à ARTIST OS en production.
 
 ## Python use
 
