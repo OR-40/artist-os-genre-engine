@@ -20,6 +20,13 @@ class FakeClassifier:
         return [{"label": label, "score": score} for label, score in self.labels]
 
 
+class FakeInstrumentAnalyzer:
+    url = "https://example.invalid/analyze"
+
+    def analyze(self, audio, sample_rate, top_k=8):
+        return [{"name": "electric guitar", "confidence": 0.91, "role": ""}]
+
+
 class FakeVocalDetector:
     def analyze_file(self, path):
         return {
@@ -39,7 +46,12 @@ class ArtistDNAEngineTests(unittest.TestCase):
         sf.write(self.audio_path, np.zeros(12 * 16000, dtype=np.float32), 16000)
         self.a = FakeClassifier("candidate_a", "fake/a", [("rock", 0.8), ("metal", 0.2)])
         self.b = FakeClassifier("candidate_b", "fake/b", [("rock", 0.7), ("pop", 0.3)])
-        self.engine = ArtistDNAEngine(FakeVocalDetector(), [self.a, self.b], window_seconds=10)
+        self.engine = ArtistDNAEngine(
+            FakeVocalDetector(),
+            [self.a, self.b],
+            window_seconds=10,
+            instrument_analyzer=FakeInstrumentAnalyzer(),
+        )
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -59,6 +71,11 @@ class ArtistDNAEngineTests(unittest.TestCase):
     def test_marks_signature_as_not_generated_instead_of_inventing(self):
         result = self.engine.analyze_file(self.audio_path)
         self.assertEqual(result["artistic_signature"]["status"], "not_generated")
+
+    def test_instrument_service_predictions_are_included(self):
+        result = self.engine.analyze_file(self.audio_path)
+        self.assertEqual(result["instrument_analysis"]["status"], "configured")
+        self.assertEqual(result["instrument_analysis"]["predictions"][0]["name"], "electric guitar")
 
     def test_missing_file_fails_clearly(self):
         with self.assertRaises(FileNotFoundError):
