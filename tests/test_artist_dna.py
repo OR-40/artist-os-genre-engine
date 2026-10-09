@@ -29,6 +29,14 @@ class FakeInstrumentAnalyzer:
         return [{"name": "Electric Guitar", "confidence": 0.7, "top1_windows": 2, "windows_analyzed": 3, "role": ""}]
 
 
+class FailingInstrumentAnalyzer:
+    enabled = True
+    model_id = "fake/remote-instruments"
+
+    def analyze_file(self, path):
+        raise TimeoutError("instrument service timeout")
+
+
 class FakeVocalDetector:
     def analyze_file(self, path):
         return {
@@ -86,6 +94,27 @@ class ArtistDNAEngineTests(unittest.TestCase):
         result = self.engine.analyze_file(self.audio_path)
         self.assertEqual(result["instrument_analysis"]["status"], "experimental")
         self.assertEqual(result["instrument_analysis"]["predictions"][0]["name"], "Electric Guitar")
+
+    def test_instrument_service_failure_is_fail_closed(self):
+        engine = ArtistDNAEngine(
+            FakeVocalDetector(),
+            [self.a, self.b],
+            window_seconds=10,
+            instrument_analyzer=FailingInstrumentAnalyzer(),
+        )
+        result = engine.analyze_file(self.audio_path)
+        self.assertEqual(result["instrument_analysis"]["status"], "unavailable")
+        self.assertEqual(result["instrument_analysis"]["predictions"], [])
+        self.assertEqual(result["genre_analysis"]["label_consensus"][0]["label"], "rock")
+        self.assertEqual(result["genres"], ["rock", "metal", "pop"])
+        self.assertIn("genre vocal ne sont pas évalués", result["voice"])
+        self.assertEqual(result["instrumentation"], [])
+
+    def test_catalog_compatibility_fields_include_actual_instrument_predictions(self):
+        result = self.engine.analyze_file(self.audio_path)
+        self.assertEqual(result["genres"][0], "rock")
+        self.assertEqual(result["instrumentation"][0]["name"], "Electric Guitar")
+        self.assertIn("genre vocal ne sont pas évalués", result["voice"])
 
     def test_disabled_instrument_candidate_does_not_run_model(self):
         engine = ArtistDNAEngine(
