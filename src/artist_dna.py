@@ -22,11 +22,12 @@ from src.artistic_report import build_artistic_report
 logger = logging.getLogger(__name__)
 
 
-# The baseline is the only default model. The AST candidate lacks a
-# Transformers config.json in its published repository and is opt-in only after
-# a dedicated loader has been validated.
+# Keep the wav2vec2 baseline and a standard, Transformers-compatible AST
+# checkpoint. The older neerajs7 checkpoint has no standard config.json and is
+# not used by this loader.
 DEFAULT_GENRE_MODELS = (
     ("genre_baseline", "dima806/music_genres_classification"),
+    ("genre_ast", "Koras1k/ast-megafinetuned-gtzan-v2-0.97score"),
 )
 
 
@@ -46,9 +47,10 @@ def _normal_label(label: str) -> str:
 class HuggingFaceGenreClassifier:
     """Lazy Hugging Face audio-classification adapter for one candidate model."""
 
-    def __init__(self, name: str, model_id: str) -> None:
+    def __init__(self, name: str, model_id: str, window_seconds: int = 30) -> None:
         self.name = name
         self.model_id = model_id
+        self.window_seconds = window_seconds
         self._pipeline: Any = None
         self._sample_rate: int | None = None
 
@@ -103,32 +105,46 @@ class ArtistDNAEngine:
         self.vocal_detector = vocal_detector
         if classifiers is None:
             model_specs = [
-                ("genre_baseline", os.getenv("ARTIST_DNA_MODEL_BASELINE", DEFAULT_GENRE_MODELS[0][1])),
+                (
+                    "genre_baseline",
+                    os.getenv("ARTIST_DNA_MODEL_BASELINE", DEFAULT_GENRE_MODELS[0][1]),
+                    30,
+                ),
             ]
-            # AST is deliberately disabled by default: the published checkpoint
-            # does not load through Transformers' generic audio-classification
-            # pipeline. Do not enable it until a dedicated loader is tested.
-            if os.getenv("ARTIST_DNA_ENABLE_AST", "false").strip().lower() == "true":
+            # Use a published AST checkpoint with config.json/model.safetensors.
+            # Its model card specifies 10-second inference windows; the baseline
+            # uses 30-second windows. The legacy neerajs7 checkpoint is not loaded.
+            if os.getenv("ARTIST_DNA_ENABLE_AST", "true").strip().lower() == "true":
                 model_specs.append((
                     "genre_ast",
-                    os.getenv("ARTIST_DNA_MODEL_AST", "neerajs7/AST-audio-classifier"),
+                    os.getenv("ARTIST_DNA_MODEL_AST", DEFAULT_GENRE_MODELS[1][1]),
+                    10,
                 ))
-            classifiers = [HuggingFaceGenreClassifier(name, model_id) for name, model_id in model_specs]
+            classifiers = [
+                HuggingFaceGenreClassifier(name, model_id, window_seconds=window_seconds)
+                for name, model_id, window_seconds in model_specs
+            ]
         self.classifiers = classifiers
         self.window_seconds = window_seconds
         self.instrument_analyzer = instrument_analyzer or LocalONNXInstrumentClassifier()
 
-    def _windows(self, audio: np.ndarray, sample_rate: int) -> list[tuple[float, np.ndarray]]:
-        """Sample 30-second excerpts across the complete track, not just three snapshots."""
-        window_size = self.window_seconds * sample_rate
+    def _windows(
+        self,
+        audio: np.ndarray,
+        sample_rate: int,
+        window_seconds: int | None = None,
+    ) -> list[tuple[float, np.ndarray]]:
+        """Sample evenly spaced windows across the complete track."""
+        window_seconds = int(window_seconds or self.window_seconds)
+        window_size = window_seconds * sample_rate
         if len(audio) == 0:
             raise ValueError("Fichier audio vide.")
         if len(audio) <= window_size:
             return [(0.0, audio)]
         last_start = len(audio) - window_size
         # Up to eight evenly distributed windows cover the beginning, middle,
-        # transitions and ending. The classifier was trained on 30-second clips;
-        # ten-second snapshots are a mismatched input for this baseline.
+        # transitions and ending. Each classifier receives the input duration
+        # documented for its checkpoint (30 s baseline, 10 s AST).
         count = min(8, max(2, int(np.ceil(len(audio) / window_size))))
         starts = sorted({int(round(value)) for value in np.linspace(0, last_start, count)})
         return [
@@ -154,7 +170,12 @@ class ArtistDNAEngine:
         for classifier in self.classifiers:
             window_results = []
             all_scores: dict[str, list[float]] = defaultdict(list)
-            for start, window in representative_windows:
+            classifier_windows = self._windows(
+                mono,
+                sample_rate,
+                getattr(classifier, "window_seconds", self.window_seconds),
+            )
+            for start, window in classifier_windows:
                 predictions = classifier.predict(window, sample_rate, top_k=10)
                 window_results.append({
                     "start_seconds": round(start, 3),
@@ -179,6 +200,11 @@ class ArtistDNAEngine:
             per_model[classifier.name] = {
                 "model_id": getattr(classifier, "model_id", None),
                 "window_count": len(window_results),
+                "window_seconds": int(getattr(classifier, "window_seconds", self.window_seconds)),
+                "selected_windows": [
+                    {"start_seconds": round(start, 3), "duration_seconds": round(len(window) / sample_rate, 3)}
+                    for start, window in classifier_windows
+                ],
                 "aggregated_predictions": ranked[:10],
                 "windows": window_results,
             }
