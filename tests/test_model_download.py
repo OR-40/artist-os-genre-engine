@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from src.vocal_detection import FireRedVADDetector, REQUIRED_AED_FILES
@@ -19,7 +20,7 @@ class FireRedVADDownloadTests(unittest.TestCase):
                 destination.write_bytes(b"test model file")
                 return str(destination)
 
-            fake_hub = type("FakeHub", (), {"hf_hub_download": staticmethod(fake_download)})
+            fake_hub = SimpleNamespace(hf_hub_download=fake_download)
             detector = FireRedVADDetector(model_dir=model_dir)
 
             with patch.dict("sys.modules", {"huggingface_hub": fake_hub}):
@@ -38,16 +39,19 @@ class FireRedVADDownloadTests(unittest.TestCase):
                 (model_dir / name).write_bytes(b"already present")
 
             detector = FireRedVADDetector(model_dir=model_dir)
-            with patch("huggingface_hub.hf_hub_download", side_effect=AssertionError("unexpected download")):
+            fake_hub = SimpleNamespace(
+                hf_hub_download=lambda **kwargs: (_ for _ in ()).throw(AssertionError("unexpected download"))
+            )
+            with patch.dict("sys.modules", {"huggingface_hub": fake_hub}):
                 detector._ensure_model_files()
 
     def test_raises_clear_error_if_download_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             model_dir = Path(tmp) / "AED"
             detector = FireRedVADDetector(model_dir=model_dir)
-            fake_hub = type("FakeHub", (), {
-                "hf_hub_download": staticmethod(lambda **kwargs: (_ for _ in ()).throw(OSError("offline")))
-            })
+            fake_hub = SimpleNamespace(
+                hf_hub_download=lambda **kwargs: (_ for _ in ()).throw(OSError("offline"))
+            )
             with patch.dict("sys.modules", {"huggingface_hub": fake_hub}):
                 with self.assertRaisesRegex(RuntimeError, "Téléchargement des poids officiels"):
                     detector._ensure_model_files()
