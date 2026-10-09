@@ -18,7 +18,6 @@ Le moteur CPU isolé est en cours de validation sur la branche `fix/local-cpu-dn
 - Si l'analyse ONNX échoue, l'orchestrateur conserve l'analyse des genres et de la voix, et signale l'analyse instrumentale comme indisponible. Les erreurs sont journalisées sans inclure le contenu audio.
 - `src/remote_instruments.py` reste disponible pour les tests et une compatibilité explicite, mais n'est plus utilisé par défaut.
 - Le pipeline complet est défini par `requirements-dna.txt`. L'API MP3 nécessite l'exécutable système FFmpeg pour le décodage temporaire ; les tests de contrat simulent ce décodage.
-- Dépendances du moteur combiné : `python -m pip install -r requirements-dna.txt`. L'API MP3 nécessite l'exécutable système FFmpeg pour le décodage temporaire ; les tests de contrat simulent ce décodage.
 - Endpoint prototype `POST /analyze` : réponse `{ "analysis": ... }`. Endpoint orchestrateur `POST /dna/analyze` : champ multipart `audio` (alias `file` conservé pour tests directs) et réponse `{ "ok": true, "dna": ... }`, compatible avec le proxy `/api/dna3` existant dans ARTIST OS. Les deux acceptent un MP3 de 50 Mio maximum, décodé en WAV PCM mono 16 kHz temporaire avec FFmpeg.
 - WAV/FLAC/OGG/M4A refusés à l'entrée : seul le MP3 est accepté. Le décodage interne dépend de l'exécutable FFmpeg disponible sur le serveur ; aucun déploiement ni branchement production.
 - Pas de téléchargement automatique de musique.
