@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import numpy as np
@@ -127,6 +128,12 @@ class ArtistDNAEngineTests(unittest.TestCase):
         result = engine.analyze_file(self.audio_path)
         self.assertEqual(result["instrument_analysis"]["status"], "not_enabled")
         self.assertEqual(result["instrument_analysis"]["predictions"], [])
+
+    def test_local_onnx_is_enabled_by_default_without_remote_service(self):
+        with patch.dict("os.environ", {}, clear=True):
+            analyzer = LocalONNXInstrumentClassifier()
+        self.assertTrue(analyzer.enabled)
+        self.assertEqual(analyzer.model_id, "onnx-community/Musical-Instrument-Classification-ONNX")
 
     def test_sample_windows_are_evenly_spaced_and_bounded(self):
         self.assertEqual(_sample_starts(16000 * 10, 16000 * 3, 4), [0, 37333, 74667, 112000])
