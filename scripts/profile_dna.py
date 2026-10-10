@@ -16,6 +16,7 @@ import os
 import platform
 import resource
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -59,6 +60,8 @@ def main() -> int:
         result["stages_seconds"]["decode_ffmpeg"] = round(time.perf_counter() - decode_started, 3)
         result["peak_rss_mib"]["after_decode"] = round(peak_rss_mib(), 1)
 
+        # Ensure the repository root is importable when this file is run directly.
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         # Import only after input validation and audio decode.
         from src.artist_dna import ArtistDNAEngine
         from src.vocal_detection import FireRedVADDetector
