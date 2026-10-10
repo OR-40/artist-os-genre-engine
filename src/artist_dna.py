@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_GENRE_MODELS = (
     ("genre_baseline", "dima806/music_genres_classification"),
-    ("genre_ast", "neerajs7/AST-audio-classifier"),
 )
 
 
@@ -99,11 +98,21 @@ class ArtistDNAEngine:
             raise ValueError("window_seconds must be at least 5")
         self.vocal_detector = vocal_detector
         if classifiers is None:
-            model_specs = (
+            # The AST candidate currently has a Hugging Face config that the
+            # standard Transformers audio-classification pipeline cannot load.
+            # Keep it opt-in until its custom architecture is implemented and tested.
+            model_specs = [
                 ("genre_baseline", os.getenv("ARTIST_DNA_MODEL_BASELINE", DEFAULT_GENRE_MODELS[0][1])),
-                ("genre_ast", os.getenv("ARTIST_DNA_MODEL_AST", DEFAULT_GENRE_MODELS[1][1])),
-            )
-            classifiers = [HuggingFaceGenreClassifier(name, model_id) for name, model_id in model_specs]
+            ]
+            optional_ast = os.getenv("ARTIST_DNA_MODEL_AST", "").strip()
+            if optional_ast:
+                model_specs.append(("genre_ast", optional_ast))
+            classifiers = [
+                HuggingFaceGenreClassifier(name, model_id)
+                for name, model_id in model_specs if model_id.strip()
+            ]
+            if not classifiers:
+                raise ValueError("Au moins un modèle de genres doit être configuré.")
         self.classifiers = classifiers
         self.window_seconds = window_seconds
         self.instrument_analyzer = instrument_analyzer or LocalONNXInstrumentClassifier()
