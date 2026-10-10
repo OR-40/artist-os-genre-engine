@@ -72,7 +72,7 @@ def main() -> int:
         result["peak_rss_mib"]["after_analysis"] = round(peak_rss_mib(), 1)
         result["audio_duration_seconds"] = output.get("duration_seconds")
         result["selected_audio_seconds"] = output.get("analysis_sampling", {}).get("selected_audio_seconds")
-        result["classifiers"] = list(output.get("models", {}).keys()) if isinstance(output.get("models"), dict) else None
+        result["classifiers"] = list(output.get("genre_analysis", {}).get("models", {}).keys()) if isinstance(output.get("genre_analysis", {}).get("models"), dict) else None
         result["instrument_status"] = output.get("instrument_analysis", {}).get("status")
 
     result["stages_seconds"]["total_wall_time"] = round(time.perf_counter() - started, 3)
