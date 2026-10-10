@@ -1,0 +1,58 @@
+name: ARTIST DNA CPU/RAM smoke profile
+
+on:
+  push:
+    branches:
+      - test/cpu-memory-profiling
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ARTIST_DNA_INSTRUMENTS_ENABLED: "false"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+    steps:
+      - name: Checkout isolated profiling branch
+        uses: actions/checkout@v4
+      - name: Install system audio tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-api.txt
+            requirements-vocal.txt
+            requirements-dna.txt
+      - name: Install CPU analysis dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dna.txt
+      - name: Generate a non-musical synthetic MP3 test fixture
+        run: |
+          mkdir -p .profile-test
+          ffmpeg -nostdin -hide_banner -loglevel error -f lavfi -i "sine=frequency=220:duration=35:sample_rate=16000" -ac 1 -b:a 128k .profile-test/synthetic.mp3
+          test -s .profile-test/synthetic.mp3
+      - name: Run CPU/RAM profile (instruments disabled)
+        run: |
+          python scripts/profile_dna.py .profile-test/synthetic.mp3
+      - name: Upload profile log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artist-dna-cpu-profile
+          path: |
+            .profile-test/synthetic.mp3
+          if-no-files-found: ignore
+          retention-days: 1
