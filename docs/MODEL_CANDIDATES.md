@@ -29,7 +29,7 @@ Ces modèles sont des **candidats de test uniquement**. Leur licence publiée ne
 2. Évaluer AST AudioSet comme source de tags audio indépendante, et non comme second classifieur de genre.
 3. Utiliser les modèles uniquement en inférence : pas de fine-tuning, pas de constitution de corpus d'entraînement à partir des pistes Incompetech.
 4. Ne pas traiter les sorties des modèles comme vérité terrain. Deux personnes doivent confirmer les étiquettes de référence à l'écoute, en conservant les désaccords.
-4. Tester des morceaux complets et des fenêtres réparties dans le temps ; agréger les prédictions sans laisser un seul court passage décider du genre global.
+5. Tester des morceaux complets et des fenêtres réparties dans le temps ; agréger les prédictions sans laisser un seul court passage décider du genre global.
 6. Inclure des cas difficiles : rock avec accents tribaux, rock/metal, pop-rock, hip-hop avec instruments rock, morceaux acoustiques/électriques et mélanges de styles.
 7. Séparer les morceaux de test des morceaux utilisés pour régler les paramètres, et si possible séparer par artiste.
 8. Mesurer macro-F1, précision/rappel par genre, matrice de confusion, durée totale d'analyse et mémoire maximale sur CPU.
