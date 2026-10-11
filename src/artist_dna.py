@@ -142,7 +142,6 @@ class ArtistDNAEngine:
         if classifiers is None:
             model_specs = (
                 ("genre_baseline", os.getenv("ARTIST_DNA_MODEL_BASELINE", DEFAULT_GENRE_MODELS[0][1])),
-                ("genre_ast", os.getenv("ARTIST_DNA_MODEL_AST", DEFAULT_GENRE_MODELS[1][1])),
             )
             classifiers = [HuggingFaceGenreClassifier(name, model_id) for name, model_id in model_specs]
         self.classifiers = classifiers
