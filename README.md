@@ -27,6 +27,8 @@ Le moteur CPU isolé est en cours de validation sur la branche `fix/local-cpu-dn
 
 ## Lancer le laboratoire isolé
 
+Notebook prêt à ouvrir dans Google Colab : [ARTIST DNA — FireRedVAD + AST + ONNX](https://colab.research.google.com/github/OR-40/artist-os-genre-engine/blob/fix/local-cpu-dna-fire-ast-onnx/notebooks/ARTIST_DNA_Fire_AST_Lab.ipynb).
+
 L'interface de test est servie par l'API sur le chemin `/lab`. Elle n'est pas une page ARTIST OS et n'est pas déployée sur le site de production.
 
 Dans un environnement Python avec FFmpeg, installer les dépendances de `requirements-dna.txt`, lancer l'application ASGI `app:app` sur le port 8000, puis ouvrir le chemin `/lab` sur cette même adresse. Le premier lancement peut télécharger les poids FireRedVAD, AST et ONNX. L'analyse s'exécute sur CPU.
