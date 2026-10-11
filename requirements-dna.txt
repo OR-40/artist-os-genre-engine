@@ -1,6 +1,7 @@
 # Optional dependencies for the isolated ARTIST DNA orchestration API.
 # Keep separate from the lightweight manifest and FireRedVAD-only environment.
 -r requirements-api.txt
+-r requirements-vocal.txt
 transformers>=4.45,<5
 torch>=2.2
 scipy>=1.10
