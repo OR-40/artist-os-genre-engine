@@ -56,6 +56,14 @@ class VocalAnalysisApiTests(unittest.TestCase):
         self.client.close()
         self.temp_dir.cleanup()
 
+    def test_lab_page_is_available_and_isolated(self):
+        response = self.client.get("/lab")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("ARTIST DNA", response.text)
+        self.assertIn("FireRedVAD", response.text)
+        self.assertIn("AST AudioSet", response.text)
+        self.assertIn("fetch('/dna/analyze'", response.text)
+
     def test_health_does_not_load_model_and_advertises_mp3(self):
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
