@@ -25,6 +25,14 @@ Le moteur CPU isolé est en cours de validation sur la branche `fix/local-cpu-dn
 - Ces 12 pistes restent `pending` : aucun audio n'a été téléchargé et elles ne sont pas encore admises à l'entraînement/évaluation officielle.
 - Pas de dataset audio réel validé pour l'entraînement.
 
+## Lancer le laboratoire isolé
+
+L'interface de test est servie par l'API sur le chemin `/lab`. Elle n'est pas une page ARTIST OS et n'est pas déployée sur le site de production.
+
+Dans un environnement Python avec FFmpeg, installer les dépendances de `requirements-dna.txt`, lancer l'application ASGI `app:app` sur le port 8000, puis ouvrir le chemin `/lab` sur cette même adresse. Le premier lancement peut télécharger les poids FireRedVAD, AST et ONNX. L'analyse s'exécute sur CPU.
+
+**Sécurité :** ce prototype n'a ni authentification ni limitation de débit. Ne pas l'exposer à Internet. Les fichiers audio sont traités dans un répertoire temporaire supprimé après la requête.
+
 ## Environnement
 
 Python 3.12 ou version compatible. Le validateur n'a pas de dépendance externe.
