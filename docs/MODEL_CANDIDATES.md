@@ -15,25 +15,25 @@ Ces modèles sont des **candidats de test uniquement**. Leur licence publiée ne
 - Intérêt : baseline directe de classification de genres, avec une taxonomie simple et connue.
 - Limites : dix classes seulement ; les styles hybrides et la couleur artistique ne sont pas explicitement couverts par ces étiquettes. La fiche ne constitue pas une validation indépendante de la qualité sur des chansons complètes. Les droits et conditions du dataset d'entraînement et du modèle de base doivent être examinés avant toute exploitation commerciale.
 
-## Candidat B — classifieur AST entraîné sur des mashups
+## AST — étiquetage audio AudioSet, pas classification de genre
 
-- Modèle : https://huggingface.co/neerajs7/AST-audio-classifier
-- Licence indiquée sur la fiche : MIT.
-- Architecture déclarée : Audio Spectrogram Transformer (AST), environ 86,5 millions de paramètres entraînables.
-- Entraînement déclaré : données de mashups pour 10 genres ; la fiche affiche des scores de compétition, qui ne doivent pas être interprétés comme une garantie de qualité sur les chansons réelles d'ARTIST OS.
-- Intérêt : candidat à comparer pour les mélanges de genres.
-- Limites : modèle relativement volumineux pour un service CPU ; la provenance/licence du dataset de mashups et les droits du modèle de base doivent être examinés avant tout usage commercial. Les performances revendiquées doivent être reproduites sur notre propre jeu de test.
+- Modèle : https://huggingface.co/MIT/ast-finetuned-audioset-10-10-0.4593
+- Architecture : Audio Spectrogram Transformer (AST), entraîné pour l'étiquetage d'événements audio AudioSet.
+- Usage dans l'orchestrateur : renvoyer des tags audio séparés (par exemple musique et certains types de sons), sans les mélanger aux sorties du classifieur de genre.
+- Limites : un tag « Rock music » ou « Music » n'est pas une classification exhaustive du morceau et ne constitue pas une vérité terrain. Les sorties doivent être examinées sur plusieurs fenêtres et comparées à l'écoute.
+- La licence, la provenance des données d'entraînement et les conditions du modèle de base doivent être vérifiées avant toute exploitation commerciale.
 
 ## Décision technique provisoire
 
-1. Commencer par le candidat A comme baseline, puis comparer le candidat B sur les mêmes fichiers si l'environnement le permet.
-2. Utiliser les modèles uniquement en inférence pour cette première comparaison : pas de fine-tuning, pas de constitution de corpus d'entraînement à partir des pistes Incompetech.
-3. Ne pas traiter les sorties du modèle comme vérité terrain. Deux personnes doivent confirmer les étiquettes de référence à l'écoute, en conservant les désaccords.
+1. Utiliser le candidat A uniquement comme baseline de genre.
+2. Évaluer AST AudioSet comme source de tags audio indépendante, et non comme second classifieur de genre.
+3. Utiliser les modèles uniquement en inférence : pas de fine-tuning, pas de constitution de corpus d'entraînement à partir des pistes Incompetech.
+4. Ne pas traiter les sorties des modèles comme vérité terrain. Deux personnes doivent confirmer les étiquettes de référence à l'écoute, en conservant les désaccords.
 4. Tester des morceaux complets et des fenêtres réparties dans le temps ; agréger les prédictions sans laisser un seul court passage décider du genre global.
-5. Inclure des cas difficiles : rock avec accents tribaux, rock/metal, pop-rock, hip-hop avec instruments rock, morceaux acoustiques/électriques et mélanges de styles.
-6. Séparer les morceaux de test des morceaux utilisés pour régler les paramètres, et si possible séparer par artiste.
-7. Mesurer macro-F1, précision/rappel par genre, matrice de confusion, durée totale d'analyse et mémoire maximale sur CPU.
-8. Avant une décision de production, archiver les versions exactes des poids, leurs fichiers de licence, la licence du modèle de base, la provenance des données d'entraînement déclarée et les résultats de tests.
+6. Inclure des cas difficiles : rock avec accents tribaux, rock/metal, pop-rock, hip-hop avec instruments rock, morceaux acoustiques/électriques et mélanges de styles.
+7. Séparer les morceaux de test des morceaux utilisés pour régler les paramètres, et si possible séparer par artiste.
+8. Mesurer macro-F1, précision/rappel par genre, matrice de confusion, durée totale d'analyse et mémoire maximale sur CPU.
+9. Avant une décision de production, archiver les versions exactes des poids, leurs fichiers de licence, la licence du modèle de base, la provenance des données d'entraînement déclarée et les résultats de tests.
 
 ## Corpus
 
