@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_GENRE_MODELS = (
-    ("genre_baseline", "dima806/music_genres_classification"),
-    ("genre_ast", "neerajs7/AST-audio-classifier"),
+    ("genre_baseline", os.getenv("ARTIST_DNA_MODEL_BASELINE", "dima806/music_genres_classification")),
 )
+DEFAULT_AST_TAGGER_MODEL = "MIT/ast-finetuned-audioset-10-10-0.4593"
 
 
 def _resample(audio: np.ndarray, source_rate: int, target_rate: int) -> np.ndarray:
@@ -85,8 +85,48 @@ class HuggingFaceGenreClassifier:
         return result
 
 
+class HuggingFaceAudioTagger:
+    """Lazy AST AudioSet tagger; outputs audio-event tags, not genre truth."""
+
+    def __init__(self, model_id: str = DEFAULT_AST_TAGGER_MODEL) -> None:
+        self.model_id = model_id
+        self._pipeline: Any = None
+        self._sample_rate: int | None = None
+
+    def _load(self) -> None:
+        if self._pipeline is not None:
+            return
+        try:
+            from transformers import pipeline
+        except ImportError as exc:
+            raise RuntimeError(
+                "Le tagueur AST nécessite les dépendances de requirements-dna.txt."
+            ) from exc
+        self._pipeline = pipeline("audio-classification", model=self.model_id, device=-1)
+        feature_extractor = getattr(self._pipeline, "feature_extractor", None)
+        self._sample_rate = int(getattr(feature_extractor, "sampling_rate", 16000))
+
+    def predict(self, audio: np.ndarray, sample_rate: int, top_k: int = 10) -> list[dict[str, Any]]:
+        self._load()
+        assert self._sample_rate is not None
+        prepared = _resample(audio, sample_rate, self._sample_rate)
+        raw = self._pipeline(
+            {"raw": prepared, "sampling_rate": self._sample_rate},
+            top_k=top_k,
+        )
+        if isinstance(raw, dict):
+            raw = [raw]
+        result = []
+        for item in raw or []:
+            label = str(item.get("label", "")).strip()
+            score = float(item.get("score", 0.0))
+            if label and np.isfinite(score):
+                result.append({"label": label, "score": max(0.0, min(score, 1.0))})
+        return result
+
+
 class ArtistDNAEngine:
-    """Orchestrates two genre candidates and a vocal-event detector."""
+    """Orchestrates genre classification, AST audio tagging and FireRedVAD."""
 
     def __init__(
         self,
@@ -94,6 +134,7 @@ class ArtistDNAEngine:
         classifiers: list[Any] | None = None,
         window_seconds: int = 10,
         instrument_analyzer: Any | None = None,
+        audio_tagger: Any | None = None,
     ) -> None:
         if window_seconds < 5:
             raise ValueError("window_seconds must be at least 5")
@@ -101,12 +142,14 @@ class ArtistDNAEngine:
         if classifiers is None:
             model_specs = (
                 ("genre_baseline", os.getenv("ARTIST_DNA_MODEL_BASELINE", DEFAULT_GENRE_MODELS[0][1])),
-                ("genre_ast", os.getenv("ARTIST_DNA_MODEL_AST", DEFAULT_GENRE_MODELS[1][1])),
             )
             classifiers = [HuggingFaceGenreClassifier(name, model_id) for name, model_id in model_specs]
         self.classifiers = classifiers
         self.window_seconds = window_seconds
         self.instrument_analyzer = instrument_analyzer or LocalONNXInstrumentClassifier()
+        self.audio_tagger = audio_tagger or HuggingFaceAudioTagger(
+            model_id=os.getenv("ARTIST_DNA_MODEL_AST_TAGGER", DEFAULT_AST_TAGGER_MODEL)
+        )
 
     def _windows(self, audio: np.ndarray, sample_rate: int) -> list[tuple[float, np.ndarray]]:
         window_size = self.window_seconds * sample_rate
@@ -168,6 +211,44 @@ class ArtistDNAEngine:
                 "aggregated_predictions": ranked[:10],
                 "windows": window_results,
             }
+
+        # AST AudioSet is an audio-event tagger, not a genre classifier. Keep its
+        # evidence separate so tags such as "Music" or "Psychedelic rock" are not
+        # incorrectly mixed into the genre consensus.
+        ast_window_results = []
+        ast_scores: dict[str, list[float]] = defaultdict(list)
+        ast_top1: dict[str, int] = defaultdict(int)
+        ast_error: str | None = None
+        try:
+            for start, window in representative_windows:
+                predictions = self.audio_tagger.predict(window, sample_rate, top_k=10)
+                ast_window_results.append({
+                    "start_seconds": round(start, 3),
+                    "predictions": predictions,
+                })
+                if predictions:
+                    ast_top1[str(predictions[0]["label"])] += 1
+                for prediction in predictions:
+                    ast_scores[str(prediction["label"])].append(float(prediction["score"]))
+            ast_ranked = sorted(
+                (
+                    {
+                        "label": label,
+                        "mean_score": round(sum(scores) / len(scores), 4),
+                        "windows_present": len(scores),
+                        "top1_windows": ast_top1.get(label, 0),
+                    }
+                    for label, scores in ast_scores.items()
+                ),
+                key=lambda item: (item["mean_score"], item["top1_windows"]),
+                reverse=True,
+            )[:15]
+            ast_status = "ok"
+        except Exception as exc:
+            ast_error = type(exc).__name__
+            ast_ranked = []
+            ast_status = "unavailable"
+            logger.warning("AST audio tagging unavailable (%s).", ast_error, exc_info=True)
 
         # Consensus counts distinct models, not repeated windows from the same model.
         # Labels are matched only after conservative text normalization.
@@ -264,9 +345,17 @@ class ArtistDNAEngine:
             "voice": voice_summary,
             "instrumentation": instruments,
             "genre_analysis": {
-                "aggregation_note": "Scores are model outputs, not calibrated probabilities. Consensus counts distinct models sharing an exactly normalized label; windows from one model do not increase model agreement.",
+                "aggregation_note": "Scores are model outputs, not calibrated probabilities. Consensus counts distinct genre classifiers sharing an exactly normalized label; AST audio tags are reported separately.",
                 "models": per_model,
                 "label_consensus": consensus[:10],
+            },
+            "audio_tag_analysis": {
+                "status": ast_status,
+                "model_id": getattr(self.audio_tagger, "model_id", DEFAULT_AST_TAGGER_MODEL),
+                "task": "AudioSet event/audio tagging; not a dedicated genre classifier",
+                "predictions": ast_ranked,
+                "windows": ast_window_results,
+                **({"reason": "Le tagueur AST a échoué ; l'analyse de genre et FireRedVAD restent disponibles."} if ast_error else {}),
             },
             "vocal_analysis": {
                 "model": vocal.get("model", "FireRedVAD"),
