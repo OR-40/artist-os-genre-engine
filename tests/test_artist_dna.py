@@ -22,6 +22,13 @@ class FakeClassifier:
         return [{"label": label, "score": score} for label, score in self.labels]
 
 
+class FakeAudioTagger:
+    model_id = "fake/ast-audioset"
+
+    def predict(self, audio, sample_rate, top_k=10):
+        return [{"label": "Music", "score": 0.86}, {"label": "Rock music", "score": 0.52}]
+
+
 class FakeInstrumentAnalyzer:
     enabled = True
     model_id = "fake/instruments"
@@ -62,6 +69,7 @@ class ArtistDNAEngineTests(unittest.TestCase):
             [self.a, self.b],
             window_seconds=10,
             instrument_analyzer=FakeInstrumentAnalyzer(),
+            audio_tagger=FakeAudioTagger(),
         )
 
     def tearDown(self):
@@ -72,6 +80,9 @@ class ArtistDNAEngineTests(unittest.TestCase):
         self.assertEqual(result["engine"], "ARTIST DNA")
         self.assertEqual(set(result["genre_analysis"]["models"]), {"candidate_a", "candidate_b"})
         self.assertEqual(result["vocal_analysis"]["model"], "FireRedVAD")
+        self.assertEqual(result["audio_tag_analysis"]["status"], "ok")
+        self.assertEqual(result["audio_tag_analysis"]["model_id"], "fake/ast-audioset")
+        self.assertEqual(result["audio_tag_analysis"]["predictions"][0]["label"], "Music")
         self.assertEqual(result["vocal_analysis"]["singing"]["total_duration_seconds"], 3.0)
         self.assertEqual(result["genre_analysis"]["label_consensus"][0]["label"], "rock")
         self.assertEqual(result["genre_analysis"]["label_consensus"][0]["models_agreeing"], 2)
@@ -102,6 +113,7 @@ class ArtistDNAEngineTests(unittest.TestCase):
             [self.a, self.b],
             window_seconds=10,
             instrument_analyzer=FailingInstrumentAnalyzer(),
+            audio_tagger=FakeAudioTagger(),
         )
         result = engine.analyze_file(self.audio_path)
         self.assertEqual(result["instrument_analysis"]["status"], "unavailable")
@@ -124,6 +136,7 @@ class ArtistDNAEngineTests(unittest.TestCase):
             [self.a, self.b],
             window_seconds=10,
             instrument_analyzer=LocalONNXInstrumentClassifier(enabled=False),
+            audio_tagger=FakeAudioTagger(),
         )
         result = engine.analyze_file(self.audio_path)
         self.assertEqual(result["instrument_analysis"]["status"], "not_enabled")
