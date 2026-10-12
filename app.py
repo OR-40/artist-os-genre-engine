@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -44,6 +45,9 @@ def decode_mp3_to_wav(mp3_path: str | Path, wav_path: str | Path) -> None:
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("Le décodage MP3 a dépassé 180 secondes.") from exc
     except subprocess.CalledProcessError as exc:
+        # Keep the client response generic, but retain FFmpeg's diagnostic in server logs.
+        detail = (exc.stderr or "").strip().replace("\n", " ")[:600]
+        logger.warning("FFmpeg MP3 decode failed (exit=%s): %s", exc.returncode, detail or "no stderr")
         raise ValueError("Fichier MP3 illisible ou invalide.") from exc
 
     try:
@@ -76,6 +80,7 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
             "model": "FireRedVAD",
             "execution_device": "CPU",
             "model_files_directory_exists": request.app.state.model_dir.is_dir(),
+            "ffmpeg_available": shutil.which("ffmpeg") is not None,
             "max_upload_bytes": MAX_UPLOAD_BYTES,
             "supported_formats": sorted(ALLOWED_SUFFIXES),
             "decoded_audio": "mono PCM WAV 16 kHz, temporary only",
