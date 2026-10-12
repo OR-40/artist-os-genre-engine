@@ -46,7 +46,7 @@ def decode_mp3_to_wav(mp3_path: str | Path, wav_path: str | Path) -> None:
         raise RuntimeError("Le décodage MP3 a dépassé 180 secondes.") from exc
     except subprocess.CalledProcessError as exc:
         # Keep the client response generic, but retain FFmpeg's diagnostic in server logs.
-        detail = (exc.stderr or "").strip().replace("\\n", " ")[:600]
+        detail = (exc.stderr or "").strip().replace("\n", " ")[:600]
         logger.warning("FFmpeg MP3 decode failed (exit=%s): %s", exc.returncode, detail or "no stderr")
         raise ValueError("Fichier MP3 illisible ou invalide.") from exc
 
