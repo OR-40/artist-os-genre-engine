@@ -9,12 +9,19 @@ from __future__ import annotations
 import io
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
 from fastapi.testclient import TestClient
+
+# When executed as `python tests/smoke_real_api.py`, Python puts tests/ on sys.path.
+# Add the repository root so `app.py` and `src/` can be imported in CI.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 
 # Set before importing app: the app constructs its default engine at import time.
 os.environ["ARTIST_DNA_ONNX_GENRE_ENABLED"] = "true"
