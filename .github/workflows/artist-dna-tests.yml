@@ -112,3 +112,59 @@ jobs:
       - name: Run real MP3 through ARTIST DNA API
         if: ${{ steps.token-check.outputs.available == 'true' }}
         run: python tests/smoke_real_api.py
+
+  # Runs only on an explicitly tagged commit; downloads the artist's official video
+  # to a temporary runner file and checks that the real track is rock-dominant.
+  real-song-validation:
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[real-song]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      ARTIST_DNA_ONNX_GENRE_REPO_ID: OR-40/artist-os-ast-onnx
+      ARTIST_DNA_ONNX_GENRE_ENABLED: "true"
+      ARTIST_DNA_INSTRUMENTS_ENABLED: "false"
+      ARTIST_DNA_TEST_AUDIO_PATH: ${{ runner.temp }}/la-terre-des-hommes.mp3
+      ARTIST_DNA_EXPECTED_GENRE: rock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check private-model credentials
+        id: token-check
+        shell: bash
+        run: |
+          if [ -n "$HF_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping real-song validation: repository secret HF_TOKEN is not configured."
+          fi
+      - name: Set up Python
+        if: ${{ steps.token-check.outputs.available == 'true' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install FFmpeg
+        if: ${{ steps.token-check.outputs.available == 'true' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+      - name: Install CPU model dependencies
+        if: ${{ steps.token-check.outputs.available == 'true' }}
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install "transformers==4.57.6" -r requirements-dna.txt
+          python -m pip install "yt-dlp>=2025.9.26"
+      - name: Fetch official LOMNOUVO video audio to temporary storage
+        if: ${{ steps.token-check.outputs.available == 'true' }}
+        run: |
+          yt-dlp --no-playlist --extract-audio --audio-format mp3 --audio-quality 5 \
+            --output "$RUNNER_TEMP/la-terre-des-hommes.%(ext)s" \
+            "https://www.youtube.com/watch?v=qW3TzzfA-fw"
+          test -s "$RUNNER_TEMP/la-terre-des-hommes.mp3"
+          duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$RUNNER_TEMP/la-terre-des-hommes.mp3")"
+          python -c 'import sys; d=float(sys.argv[1]); print(f"Downloaded track duration: {d:.1f}s"); assert d >= 180, "Downloaded audio is too short to represent the full song."' "$duration"
+      - name: Analyze real song through ARTIST DNA API
+        if: ${{ steps.token-check.outputs.available == 'true' }}
+        run: python tests/smoke_real_api.py
