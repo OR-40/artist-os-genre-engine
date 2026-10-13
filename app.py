@@ -43,11 +43,11 @@ def decode_audio_to_wav(audio_path: str | Path, wav_path: str | Path) -> None:
     except FileNotFoundError as exc:
         raise RuntimeError("FFmpeg est requis pour décoder les fichiers audio.") from exc
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("Le décodage MP3 a dépassé 180 secondes.") from exc
+        raise RuntimeError("Le décodage audio a dépassé 180 secondes.") from exc
     except subprocess.CalledProcessError as exc:
         # Keep the client response generic, but retain FFmpeg's diagnostic in server logs.
         detail = (exc.stderr or "").strip().replace("\n", " ")[:600]
-        logger.warning("FFmpeg MP3 decode failed (exit=%s): %s", exc.returncode, detail or "no stderr")
+        logger.warning("FFmpeg audio decode failed (exit=%s): %s", exc.returncode, detail or "no stderr")
         raise ValueError("Fichier audio illisible ou invalide.") from exc
 
     try:
@@ -55,7 +55,7 @@ def decode_audio_to_wav(audio_path: str | Path, wav_path: str | Path) -> None:
     except Exception as exc:
         raise ValueError("Le fichier audio n'a pas produit un audio valide.") from exc
     if info.frames <= 0 or info.samplerate != 16000 or info.channels != 1:
-        raise ValueError("Le MP3 décodé ne contient pas d'audio mono 16 kHz valide.")
+        raise ValueError("Le fichier audio décodé ne contient pas d'audio mono 16 kHz valide.")
 
 
 def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> FastAPI:
@@ -102,10 +102,10 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
 
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
-                mp3_path = Path(temp_dir) / "upload.mp3"
+                audio_path = Path(temp_dir) / ("upload" + suffix)
                 wav_path = Path(temp_dir) / "decoded.wav"
-                mp3_path.write_bytes(payload)
-                decode_audio_to_wav(mp3_path, wav_path)
+                audio_path.write_bytes(payload)
+                decode_audio_to_wav(audio_path, wav_path)
                 try:
                     analysis = request.app.state.detector.analyze_file(str(wav_path))
                 except FileNotFoundError as exc:
@@ -138,7 +138,8 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
         if upload is None:
             raise HTTPException(status_code=400, detail="Fichier audio manquant.")
         filename = Path(upload.filename or "").name
-        if Path(filename).suffix.lower() not in ALLOWED_SUFFIXES:
+        suffix = Path(filename).suffix.lower()
+        if suffix not in ALLOWED_SUFFIXES:
             raise HTTPException(status_code=415, detail="Format non pris en charge. Fournir un MP3, WAV, FLAC, OGG ou M4A.")
         payload = await upload.read(MAX_UPLOAD_BYTES + 1)
         await upload.close()
@@ -148,10 +149,10 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
             raise HTTPException(status_code=413, detail="Fichier supérieur à la limite de 50 Mio.")
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
-                mp3_path = Path(temp_dir) / "upload.mp3"
+                audio_path = Path(temp_dir) / ("upload" + suffix)
                 wav_path = Path(temp_dir) / "decoded.wav"
-                mp3_path.write_bytes(payload)
-                decode_audio_to_wav(mp3_path, wav_path)
+                audio_path.write_bytes(payload)
+                decode_audio_to_wav(audio_path, wav_path)
                 analysis = request.app.state.dna_engine.analyze_file(str(wav_path))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Fichier audio illisible ou invalide.") from exc
