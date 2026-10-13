@@ -124,7 +124,7 @@ jobs:
       ARTIST_DNA_ONNX_GENRE_REPO_ID: OR-40/artist-os-ast-onnx
       ARTIST_DNA_ONNX_GENRE_ENABLED: "true"
       ARTIST_DNA_INSTRUMENTS_ENABLED: "false"
-      ARTIST_DNA_TEST_AUDIO_PATH: ${{ runner.temp }}/la-terre-des-hommes.mp3
+      ARTIST_DNA_TEST_AUDIO_PATH: ${{ github.workspace }}/la-terre-des-hommes.mp3
       ARTIST_DNA_EXPECTED_GENRE: rock
     steps:
       - name: Checkout
@@ -160,9 +160,9 @@ jobs:
         if: ${{ steps.token-check.outputs.available == 'true' }}
         run: |
           yt-dlp --no-playlist --extract-audio --audio-format mp3 --audio-quality 5 \
-            --output "$RUNNER_TEMP/la-terre-des-hommes.%(ext)s" \
+            --output "$GITHUB_WORKSPACE/la-terre-des-hommes.%(ext)s" \
             "https://www.youtube.com/watch?v=qW3TzzfA-fw"
-          test -s "$RUNNER_TEMP/la-terre-des-hommes.mp3"
+          test -s "$GITHUB_WORKSPACE/la-terre-des-hommes.mp3"
           duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$RUNNER_TEMP/la-terre-des-hommes.mp3")"
           python -c 'import sys; d=float(sys.argv[1]); print(f"Downloaded track duration: {d:.1f}s"); assert d >= 180, "Downloaded audio is too short to represent the full song."' "$duration"
       - name: Analyze real song through ARTIST DNA API
