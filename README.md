@@ -2,11 +2,11 @@
 
 Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteuse, avant toute intégration à ARTIST OS.
 
-**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** Il contient un validateur de manifeste, un prototype de détection d'événements vocaux FireRedVAD et une API locale de test. Aucun modèle de classification de genres n'est encore validé.
+**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** Il contient un validateur de manifeste, un prototype de détection d'événements vocaux FireRedVAD et une API locale de test. Le candidat `msaligs/ast_fine_tuned_music_genre_10` a donné un signal rock plus cohérent sur un morceau de test, mais il n'est pas encore validé sur un jeu de référence.
 
 ## Moteur ARTIST DNA — prototype d'orchestration
 
-Le moteur CPU isolé est en cours de validation sur la branche `fix/local-cpu-dna-fire-ast-onnx` :
+Le moteur CPU isolé est en cours de validation sur la branche `feat/msaligs-ast-genre-candidate` :
 
 - `POST /dna/analyze` combine un classifieur de genre baseline, le tagueur audio AST AudioSet et la détection d'événements vocaux FireRedVAD. Les sorties AST sont séparées des genres : AudioSet prédit des événements/classes audio, pas une taxonomie fiable de genres.
 - Les deux classifieurs sont chargés à la demande. Les identifiants peuvent être remplacés avec `ARTIST_DNA_MODEL_BASELINE` et `ARTIST_DNA_MODEL_AST`.
@@ -14,7 +14,7 @@ Le moteur CPU isolé est en cours de validation sur la branche `fix/local-cpu-dn
 - L'analyse instrumentale par défaut utilise `src/instrument_classifier.py` : modèle ONNX quantifié `onnx-community/Musical-Instrument-Classification-ONNX`, exécution locale via `CPUExecutionProvider`, jusqu'à six extraits de 3 secondes. Le fichier ONNX quantifié fait environ 90 Mo et est téléchargé depuis Hugging Face au premier usage, puis mis en cache.
 - `ARTIST_DNA_INSTRUMENTS_ENABLED=true` active l'analyse ONNX par défaut ; définir explicitement `false` permet de la désactiver. Aucun service distant d'instruments ni variable `INSTRUMENTS_URL` n'est requis par défaut.
 - La signature artistique reste volontairement non générée tant que les preuves musicales ne suffisent pas. Les prédictions d'instruments sont expérimentales : le modèle cible neuf catégories et peut confondre des instruments dans un mix complet.
-- Le classifieur de genre baseline est exécuté sur CPU via Transformers (`device=-1`). Le tagueur AST AudioSet `MIT/ast-finetuned-audioset-10-10-0.4593` est exécuté séparément sur CPU ; ses tags (par exemple « Music » ou « Rock music ») ne sont pas mélangés au consensus de genres. La latence et la mémoire doivent être mesurées sur l'hébergement cible avant toute mise en production.
+- Le candidat de genre `msaligs/ast_fine_tuned_music_genre_10` est exécuté sur CPU via Transformers (`device=-1`). Il compte environ 86,2 millions de paramètres ; sa latence et sa mémoire doivent être mesurées sur l'hébergement cible avant tout raccordement. Pour les morceaux longs, le genre est évalué sur jusqu'à dix fenêtres de 10 secondes réparties dans le morceau ; le tagueur AST AudioSet et les instruments restent limités à trois fenêtres représentatives pour contenir le coût CPU. Le tagueur AST AudioSet `MIT/ast-finetuned-audioset-10-10-0.4593` est exécuté séparément sur CPU ; ses tags (par exemple « Music » ou « Rock music ») ne sont pas mélangés au consensus de genres. La latence et la mémoire doivent être mesurées sur l'hébergement cible avant toute mise en production.
 - Si l'analyse ONNX échoue, l'orchestrateur conserve l'analyse des genres et de la voix, et signale l'analyse instrumentale comme indisponible. Les erreurs sont journalisées sans inclure le contenu audio.
 - `src/remote_instruments.py` reste disponible pour les tests et une compatibilité explicite, mais n'est plus utilisé par défaut.
 - Le pipeline complet est défini par `requirements-dna.txt`. L'API MP3 nécessite l'exécutable système FFmpeg pour le décodage temporaire ; les tests de contrat simulent ce décodage.
