@@ -16,6 +16,7 @@ import numpy as np
 import soundfile as sf
 
 from src.instrument_classifier import LocalONNXInstrumentClassifier
+from src.onnx_genre_classifier import LocalONNXGenreClassifier
 
 
 logger = logging.getLogger(__name__)
@@ -154,10 +155,16 @@ class ArtistDNAEngine:
             raise ValueError("window_seconds must be at least 5")
         self.vocal_detector = vocal_detector
         if classifiers is None:
-            model_specs = (
-                ("genre_candidate", os.getenv("ARTIST_DNA_MODEL_BASELINE", DEFAULT_GENRE_MODELS[0][1])),
-            )
-            classifiers = [HuggingFaceGenreClassifier(name, model_id) for name, model_id in model_specs]
+            onnx_model_dir = os.getenv("ARTIST_DNA_ONNX_GENRE_MODEL_PATH", "").strip()
+            onnx_repo_id = os.getenv("ARTIST_DNA_ONNX_GENRE_REPO_ID", "").strip()
+            onnx_enabled = os.getenv("ARTIST_DNA_ONNX_GENRE_ENABLED", "").strip().lower() == "true"
+            if onnx_model_dir or onnx_repo_id or onnx_enabled:
+                classifiers = [LocalONNXGenreClassifier(model_dir=onnx_model_dir or None)]
+            else:
+                model_specs = (
+                    ("genre_candidate", os.getenv("ARTIST_DNA_MODEL_BASELINE", DEFAULT_GENRE_MODELS[0][1])),
+                )
+                classifiers = [HuggingFaceGenreClassifier(name, model_id) for name, model_id in model_specs]
         self.classifiers = classifiers
         self.window_seconds = window_seconds
         self.instrument_analyzer = instrument_analyzer or LocalONNXInstrumentClassifier()

@@ -25,6 +25,22 @@ Le moteur CPU isolé est en cours de validation sur la branche `feat/ast-msaligs
 - Ces 12 pistes restent `pending` : aucun audio n'a été téléchargé et elles ne sont pas encore admises à l'entraînement/évaluation officielle.
 - Pas de dataset audio réel validé pour l'entraînement.
 
+### Exécution du candidat AST exporté en ONNX
+
+Le candidat AST exporté s'exécute directement via ONNX Runtime sur CPU, sans charger les poids PyTorch. Le fichier de poids (environ 345 Mo) est conservé hors de Git dans le dépôt privé Hugging Face `OR-40/artist-os-ast-onnx`.
+
+**Mode recommandé pour le runtime isolé :**
+- Activer explicitement l'adaptateur en définissant `ARTIST_DNA_ONNX_GENRE_REPO_ID=OR-40/artist-os-ast-onnx` (ou `ARTIST_DNA_ONNX_GENRE_ENABLED=true`).
+- Ajouter `HF_TOKEN` comme secret côté serveur, avec uniquement un droit de lecture sur le dépôt privé du modèle. Ne jamais le committer ni l'afficher dans les logs.
+- Une fois l'adaptateur activé, le moteur télécharge et met en cache uniquement `model.onnx`, `config.json`, `preprocessor_config.json` et `genre_labels.json` depuis `ARTIST_DNA_ONNX_GENRE_REPO_ID` (par défaut `OR-40/artist-os-ast-onnx`).
+- Le cache Hugging Face évite de retélécharger le modèle à chaque chargement si le disque de l'environnement est persistant.
+- Pour un environnement qui fournit déjà les fichiers, définir `ARTIST_DNA_ONNX_GENRE_MODEL_PATH` sur le dossier local ; ce chemin explicite prend priorité sur le téléchargement distant.
+- Le dépôt de modèle est privé. Sans `HF_TOKEN` ou avec un jeton sans droit de lecture, le chargement échoue explicitement. Le jeton n'est pas inclus dans les messages d'erreur.
+
+Le téléchargement à froid nécessite une connexion réseau et environ 345 Mo d'espace disque. Avant un déploiement, il faut vérifier la persistance du cache, les limites de mémoire/CPU et la latence de l'API sur l'hébergement cible.
+
+Le classifieur vérifie le nom d'entrée ONNX, le nombre de sorties et la présence des labels. Les labels sont explicitement mappés dans `genre_labels.json`; cette correspondance reflète l'ordre documenté du candidat et doit rester traçable. Les scores sont des sorties du classifieur, pas des probabilités calibrées.
+
 ## Environnement
 
 Python 3.12 ou version compatible. Le validateur n'a pas de dépendance externe.
