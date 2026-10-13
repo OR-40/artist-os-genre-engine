@@ -61,10 +61,10 @@ class VocalAnalysisApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["model"], "FireRedVAD")
         self.assertEqual(response.json()["execution_device"], "CPU")
-        self.assertEqual(response.json()["supported_formats"], [".mp3"])
+        self.assertEqual(response.json()["supported_formats"], [".flac", ".m4a", ".mp3", ".ogg", ".wav"])
 
     def test_analyze_mp3_returns_analysis_envelope(self):
-        with patch("app.decode_mp3_to_wav", side_effect=fake_decode_mp3_to_wav):
+        with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
             response = self.client.post(
                 "/analyze",
                 files={"file": ("sample.mp3", b"mocked MP3 payload", "audio/mpeg")},
@@ -77,7 +77,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
         app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine())
         client = TestClient(app)
         try:
-            with patch("app.decode_mp3_to_wav", side_effect=fake_decode_mp3_to_wav):
+            with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
                 response = client.post(
                     "/dna/analyze",
                     files={"audio": ("sample.mp3", b"mocked MP3 payload", "audio/mpeg")},
@@ -85,6 +85,29 @@ class VocalAnalysisApiTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertTrue(response.json()["ok"])
             self.assertEqual(response.json()["dna"]["engine"], "ARTIST DNA")
+        finally:
+            client.close()
+
+    def test_dna_endpoint_accepts_all_advertised_audio_formats(self):
+        app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine())
+        client = TestClient(app)
+        samples = [
+            ("sample.mp3", "audio/mpeg"),
+            ("sample.wav", "audio/wav"),
+            ("sample.flac", "audio/flac"),
+            ("sample.ogg", "audio/ogg"),
+            ("sample.m4a", "audio/mp4"),
+        ]
+        try:
+            with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
+                for filename, content_type in samples:
+                    with self.subTest(filename=filename):
+                        response = client.post(
+                            "/dna/analyze",
+                            files={"audio": (filename, b"mocked audio payload", content_type)},
+                        )
+                        self.assertEqual(response.status_code, 200, response.text)
+                        self.assertTrue(response.json()["ok"])
         finally:
             client.close()
 
@@ -102,7 +125,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
         app = create_app(detector=FakeDetector(), dna_engine=ExplodingDNAEngine())
         client = TestClient(app)
         try:
-            with patch("app.decode_mp3_to_wav", side_effect=fake_decode_mp3_to_wav):
+            with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
                 with self.assertLogs("artist_os_genre_engine", level="ERROR") as captured:
                     response = client.post(
                         "/dna/analyze",
@@ -114,15 +137,15 @@ class VocalAnalysisApiTests(unittest.TestCase):
         finally:
             client.close()
 
-    def test_rejects_wav_because_upload_contract_is_mp3_only(self):
+    def test_rejects_unsupported_audio_format(self):
         response = self.client.post(
             "/analyze",
-            files={"file": ("sample.wav", make_wav(), "audio/wav")},
+            files={"file": ("sample.aac", b"unsupported", "audio/aac")},
         )
         self.assertEqual(response.status_code, 415)
 
     def test_rejects_corrupt_mp3(self):
-        with patch("app.decode_mp3_to_wav", side_effect=ValueError("bad mp3")):
+        with patch("app.decode_audio_to_wav", side_effect=ValueError("bad mp3")):
             response = self.client.post(
                 "/analyze",
                 files={"file": ("sample.mp3", b"not-a-real-mp3", "audio/mpeg")},
