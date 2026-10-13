@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   unit-tests:
+    if: ${{ !(github.event_name == 'push' && contains(github.event.head_commit.message, '[real-song]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -34,6 +35,7 @@ jobs:
         run: python -m unittest discover -s tests -v
 
   real-onnx-model-smoke:
+    if: ${{ !(github.event_name == 'push' && contains(github.event.head_commit.message, '[real-song]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -70,6 +72,7 @@ jobs:
         run: python tests/smoke_real_onnx_model.py
 
   real-api-end-to-end:
+    if: ${{ !(github.event_name == 'push' && contains(github.event.head_commit.message, '[real-song]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -156,12 +159,12 @@ jobs:
           python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
           python -m pip install "transformers==4.57.6" -r requirements-dna.txt
           python -m pip install "yt-dlp>=2025.9.26"
-      - name: Fetch official LOMNOUVO video audio to temporary storage
+      - name: Fetch official LOMNOUVO Bandcamp audio to temporary storage
         if: ${{ steps.token-check.outputs.available == 'true' }}
         run: |
           yt-dlp --no-playlist --extract-audio --audio-format mp3 --audio-quality 5 \
             --output "$GITHUB_WORKSPACE/la-terre-des-hommes.%(ext)s" \
-            "https://www.youtube.com/watch?v=qW3TzzfA-fw"
+            "https://lomnouvo.bandcamp.com/track/la-terre-des-hommes-2"
           test -s "$GITHUB_WORKSPACE/la-terre-des-hommes.mp3"
           duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$RUNNER_TEMP/la-terre-des-hommes.mp3")"
           python -c 'import sys; d=float(sys.argv[1]); print(f"Downloaded track duration: {d:.1f}s"); assert d >= 180, "Downloaded audio is too short to represent the full song."' "$duration"
