@@ -156,8 +156,10 @@ class ArtistDNAEngine:
         self.vocal_detector = vocal_detector
         if classifiers is None:
             onnx_model_dir = os.getenv("ARTIST_DNA_ONNX_GENRE_MODEL_PATH", "").strip()
-            if onnx_model_dir:
-                classifiers = [LocalONNXGenreClassifier(model_dir=onnx_model_dir)]
+            onnx_repo_id = os.getenv("ARTIST_DNA_ONNX_GENRE_REPO_ID", "").strip()
+            onnx_enabled = os.getenv("ARTIST_DNA_ONNX_GENRE_ENABLED", "").strip().lower() == "true"
+            if onnx_model_dir or onnx_repo_id or onnx_enabled:
+                classifiers = [LocalONNXGenreClassifier(model_dir=onnx_model_dir or None)]
             else:
                 model_specs = (
                     ("genre_candidate", os.getenv("ARTIST_DNA_MODEL_BASELINE", DEFAULT_GENRE_MODELS[0][1])),
