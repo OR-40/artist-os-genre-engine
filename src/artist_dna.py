@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_GENRE_MODELS = (
-    ("genre_baseline", os.getenv("ARTIST_DNA_MODEL_BASELINE", "msaligs/ast_fine_tuned_music_genre_10")),
+    ("genre_candidate", os.getenv("ARTIST_DNA_MODEL_BASELINE", "msaligs/ast_fine_tuned_music_genre_10")),
 )
 DEFAULT_AST_TAGGER_MODEL = "MIT/ast-finetuned-audioset-10-10-0.4593"
 
@@ -155,7 +155,7 @@ class ArtistDNAEngine:
         self.vocal_detector = vocal_detector
         if classifiers is None:
             model_specs = (
-                ("genre_baseline", os.getenv("ARTIST_DNA_MODEL_BASELINE", DEFAULT_GENRE_MODELS[0][1])),
+                ("genre_candidate", os.getenv("ARTIST_DNA_MODEL_BASELINE", DEFAULT_GENRE_MODELS[0][1])),
             )
             classifiers = [HuggingFaceGenreClassifier(name, model_id) for name, model_id in model_specs]
         self.classifiers = classifiers
