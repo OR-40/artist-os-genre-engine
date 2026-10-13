@@ -15,14 +15,16 @@ Ces modèles sont des **candidats de test uniquement**. Leur licence publiée ne
 - Intérêt : baseline directe de classification de genres, avec une taxonomie simple et connue.
 - Limites : dix classes seulement ; les styles hybrides et la couleur artistique ne sont pas explicitement couverts par ces étiquettes. La fiche ne constitue pas une validation indépendante de la qualité sur des chansons complètes. Les droits et conditions du dataset d'entraînement et du modèle de base doivent être examinés avant toute exploitation commerciale.
 
-## Candidat B — classifieur AST entraîné sur des mashups
+## Candidat B — AST fine-tuné pour les genres musicaux
 
-- Modèle : https://huggingface.co/neerajs7/AST-audio-classifier
-- Licence indiquée sur la fiche : MIT.
-- Architecture déclarée : Audio Spectrogram Transformer (AST), environ 86,5 millions de paramètres entraînables.
-- Entraînement déclaré : données de mashups pour 10 genres ; la fiche affiche des scores de compétition, qui ne doivent pas être interprétés comme une garantie de qualité sur les chansons réelles d'ARTIST OS.
-- Intérêt : candidat à comparer pour les mélanges de genres.
-- Limites : modèle relativement volumineux pour un service CPU ; la provenance/licence du dataset de mashups et les droits du modèle de base doivent être examinés avant tout usage commercial. Les performances revendiquées doivent être reproduites sur notre propre jeu de test.
+- Modèle : https://huggingface.co/msaligs/ast_fine_tuned_music_genre_10
+- Licence indiquée sur la fiche du modèle : MIT.
+- Architecture : Audio Spectrogram Transformer (AST), environ 86,2 millions de paramètres.
+- Classes annoncées : blues, classical, country, disco, hiphop, jazz, metal, pop, reggae, rock.
+- Signal de test : sur « 02 - La terre des Hommes.mp3 », le classement exploratoire a placé rock en tête sur 7/10 fenêtres de 10 secondes (score moyen rock 56,73 %), devant metal (20,29 %) et country (10,90 %).
+- Limites : ce résultat porte sur un seul morceau et ne valide ni la qualité générale ni le mapping des labels pour tous les fichiers. Le fichier de configuration chargé renvoie des noms génériques `LABEL_0` à `LABEL_9`; le mapping est explicité d'après l'ordre de genres annoncé par la fiche et doit être confirmé avant la production.
+- Déploiement : le checkpoint publié est PyTorch/Safetensors, pas un modèle ONNX prêt à charger dans Transformers.js. Il ne peut pas remplacer directement le classifieur ONNX du navigateur ; il faut soit exécuter le candidat dans le moteur Python CPU, soit exporter/valider une version ONNX.
+- Décision : meilleur candidat testé jusqu'ici sur ce morceau précis, à valider sur un ensemble représentatif avant de considérer les sorties comme fiables en général. Les droits des données d'entraînement et les conditions d'usage commercial restent à examiner.
 
 ## Décision technique provisoire
 
