@@ -1,4 +1,8 @@
+import os
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -66,6 +70,43 @@ class ONNXGenreClassifierTests(unittest.TestCase):
         classifier._labels = {9: "rock"}
         with self.assertRaisesRegex(ValueError, "vide"):
             classifier.predict(np.array([], dtype=np.float32), 16000)
+
+    def test_private_repo_download_uses_server_token_and_only_model_files(self):
+        with tempfile.TemporaryDirectory() as cache_dir:
+            with patch.dict(
+                os.environ,
+                {
+                    "HF_TOKEN": "test-secret-token",
+                    "ARTIST_DNA_ONNX_GENRE_REPO_ID": "OR-40/artist-os-ast-onnx",
+                },
+                clear=False,
+            ):
+                with patch(
+                    "huggingface_hub.snapshot_download",
+                    return_value=cache_dir,
+                ) as download:
+                    classifier = LocalONNXGenreClassifier()
+                    resolved = classifier._resolve_model_dir()
+
+            self.assertEqual(resolved, Path(cache_dir))
+            kwargs = download.call_args.kwargs
+            self.assertEqual(kwargs["repo_id"], "OR-40/artist-os-ast-onnx")
+            self.assertEqual(kwargs["token"], "test-secret-token")
+            self.assertEqual(
+                set(kwargs["allow_patterns"]),
+                {
+                    "model.onnx",
+                    "config.json",
+                    "preprocessor_config.json",
+                    "genre_labels.json",
+                },
+            )
+
+    def test_private_repo_download_requires_token(self):
+        with patch.dict(os.environ, {}, clear=True):
+            classifier = LocalONNXGenreClassifier()
+            with self.assertRaisesRegex(RuntimeError, "HF_TOKEN"):
+                classifier._resolve_model_dir()
 
 
 if __name__ == "__main__":
