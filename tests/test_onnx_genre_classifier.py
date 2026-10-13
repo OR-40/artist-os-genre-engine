@@ -56,7 +56,7 @@ class ONNXGenreClassifierTests(unittest.TestCase):
         self.assertEqual(len(predictions), 3)
         self.assertEqual(predictions[0]["label"], "rock")
         self.assertGreater(predictions[0]["score"], predictions[1]["score"])
-        self.assertAlmostEqual(sum(item["score"] for item in predictions) < 1.0, True)
+        self.assertLess(sum(item["score"] for item in predictions), 1.0)
 
     def test_empty_audio_is_rejected(self):
         classifier = LocalONNXGenreClassifier()
