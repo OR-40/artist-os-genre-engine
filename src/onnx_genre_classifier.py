@@ -18,7 +18,8 @@ class LocalONNXGenreClassifier:
 
     def __init__(self, name: str = "genre_candidate_onnx", model_dir: str | Path | None = None) -> None:
         self.name = name
-        self.model_dir = Path(model_dir or os.getenv("ARTIST_DNA_ONNX_GENRE_MODEL_PATH", "")).expanduser()
+        configured_dir = str(model_dir or os.getenv("ARTIST_DNA_ONNX_GENRE_MODEL_PATH", "")).strip()
+        self.model_dir = Path(configured_dir).expanduser() if configured_dir else None
         self.model_id = "msaligs/ast_fine_tuned_music_genre_10"
         self._session: Any = None
         self._extractor: Any = None
@@ -28,7 +29,7 @@ class LocalONNXGenreClassifier:
     def _load(self) -> None:
         if self._session is not None:
             return
-        if not str(self.model_dir) or not self.model_dir.is_dir():
+        if self.model_dir is None or not self.model_dir.is_dir():
             raise RuntimeError(
                 "ARTIST_DNA_ONNX_GENRE_MODEL_PATH doit pointer vers le dossier local du modèle AST ONNX."
             )
