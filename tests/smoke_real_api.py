@@ -37,29 +37,36 @@ def main() -> int:
     if not os.getenv("HF_TOKEN", "").strip():
         raise RuntimeError("HF_TOKEN is required for the private AST ONNX model.")
 
-    sample_rate = 16_000
-    duration = 12
-    time = np.arange(sample_rate * duration, dtype=np.float32) / sample_rate
-    audio = (
-        0.18 * np.sin(2 * np.pi * 110.0 * time)
-        + 0.12 * np.sin(2 * np.pi * 220.0 * time)
-        + 0.06 * np.sin(2 * np.pi * 440.0 * time)
-    ).astype(np.float32)
+    external_audio = os.getenv("ARTIST_DNA_TEST_AUDIO_PATH", "").strip()
+    expected_genre = os.getenv("ARTIST_DNA_EXPECTED_GENRE", "").strip().casefold()
 
     with tempfile.TemporaryDirectory(prefix="artist-dna-e2e-") as temp:
         root = Path(temp)
-        wav_path = root / "synthetic.wav"
-        mp3_path = root / "synthetic.mp3"
-        sf.write(str(wav_path), audio, sample_rate)
-        subprocess.run(
-            [
-                "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
-                "-i", str(wav_path), "-codec:a", "libmp3lame", "-b:a", "128k",
-                str(mp3_path),
-            ],
-            check=True,
-            timeout=60,
-        )
+        if external_audio:
+            mp3_path = Path(external_audio).expanduser().resolve()
+            if not mp3_path.is_file() or mp3_path.suffix.lower() != ".mp3":
+                raise RuntimeError("ARTIST_DNA_TEST_AUDIO_PATH must point to an existing MP3 file.")
+        else:
+            sample_rate = 16_000
+            duration = 12
+            time = np.arange(sample_rate * duration, dtype=np.float32) / sample_rate
+            audio = (
+                0.18 * np.sin(2 * np.pi * 110.0 * time)
+                + 0.12 * np.sin(2 * np.pi * 220.0 * time)
+                + 0.06 * np.sin(2 * np.pi * 440.0 * time)
+            ).astype(np.float32)
+            wav_path = root / "synthetic.wav"
+            mp3_path = root / "synthetic.mp3"
+            sf.write(str(wav_path), audio, sample_rate)
+            subprocess.run(
+                [
+                    "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                    "-i", str(wav_path), "-codec:a", "libmp3lame", "-b:a", "128k",
+                    str(mp3_path),
+                ],
+                check=True,
+                timeout=60,
+            )
 
         app = create_app()
         with TestClient(app) as client, mp3_path.open("rb") as handle:
@@ -92,12 +99,22 @@ def main() -> int:
         if vocal.get("model") != "FireRedVAD":
             raise AssertionError(f"Unexpected vocal model in response: {vocal.get('model')!r}")
 
+        genre_predictions = models["genre_candidate_onnx"].get("aggregated_predictions") or []
+        top_genre = str(genre_predictions[0].get("label", "")).casefold() if genre_predictions else ""
         print("ARTIST DNA END-TO-END API: OK")
+        print(f"Input: {'real audio file' if external_audio else 'synthetic audio'}")
         print(f"Duration: {dna.get('duration_seconds')} seconds")
         print(f"Genre model windows: {models['genre_candidate_onnx'].get('window_count')}")
+        print("Genre ranking:", [(item.get("label"), item.get("mean_score")) for item in genre_predictions[:5]])
         print(f"AST audio tags: {len(tag_analysis['predictions'])}")
+        print("Top AST tags:", [(item.get("label"), item.get("mean_score")) for item in tag_analysis["predictions"][:5]])
         print(f"FireRedVAD singing ratio: {(vocal.get('singing') or {}).get('ratio')}")
-        print("Note: synthetic audio validates integration, not classification accuracy.")
+        if expected_genre:
+            if top_genre != expected_genre:
+                raise AssertionError(f"Expected top genre {expected_genre!r}, got {top_genre!r}; ranking={genre_predictions[:5]}")
+            print(f"Expected genre check: PASS ({expected_genre})")
+        elif not external_audio:
+            print("Note: synthetic audio validates integration, not classification accuracy.")
     return 0
 
 
