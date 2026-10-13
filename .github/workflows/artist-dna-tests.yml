@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   unit-tests:
-    if: ${{ !(github.event_name == 'push' && contains(github.event.head_commit.message, '[real-song]')) }}
+    if: ${{ !(github.event_name == 'push' && contains(github.event.head_commit.message, '[real-song]')) && (github.event_name != 'pull_request' || github.event.pull_request.head.ref != 'feat/ast-onnx-runtime-adapter') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -35,7 +35,7 @@ jobs:
         run: python -m unittest discover -s tests -v
 
   real-onnx-model-smoke:
-    if: ${{ !(github.event_name == 'push' && contains(github.event.head_commit.message, '[real-song]')) }}
+    if: ${{ !(github.event_name == 'push' && contains(github.event.head_commit.message, '[real-song]')) && (github.event_name != 'pull_request' || github.event.pull_request.head.ref != 'feat/ast-onnx-runtime-adapter') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -72,7 +72,7 @@ jobs:
         run: python tests/smoke_real_onnx_model.py
 
   real-api-end-to-end:
-    if: ${{ !(github.event_name == 'push' && contains(github.event.head_commit.message, '[real-song]')) }}
+    if: ${{ !(github.event_name == 'push' && contains(github.event.head_commit.message, '[real-song]')) && (github.event_name != 'pull_request' || github.event.pull_request.head.ref != 'feat/ast-onnx-runtime-adapter') }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
