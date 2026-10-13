@@ -2,11 +2,11 @@
 
 Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteuse, avant toute intégration à ARTIST OS.
 
-**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** Il contient un validateur de manifeste, un prototype de détection d'événements vocaux FireRedVAD et une API locale de test. Aucun modèle de classification de genres n'est encore validé.
+**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** Il contient un validateur de manifeste, un prototype de détection d'événements vocaux FireRedVAD et une API locale de test. Le candidat `msaligs/ast_fine_tuned_music_genre_10` a donné un signal rock plus cohérent sur un morceau de test, mais il n'est pas encore validé sur un jeu de référence.
 
 ## Moteur ARTIST DNA — prototype d'orchestration
 
-Le moteur CPU isolé est en cours de validation sur la branche `fix/local-cpu-dna-fire-ast-onnx` :
+Le moteur CPU isolé est en cours de validation sur la branche `feat/ast-msaligs-candidate-main` :
 
 - `POST /dna/analyze` combine deux candidats de classification de genres (baseline wav2vec2 et candidat AST) avec la détection vocale FireRedVAD.
 - Les deux classifieurs sont chargés à la demande. Les identifiants peuvent être remplacés avec `ARTIST_DNA_MODEL_BASELINE` et `ARTIST_DNA_MODEL_AST`.
