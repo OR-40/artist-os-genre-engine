@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from src.artist_dna import ArtistDNAEngine
+from src.artist_dna import ArtistDNAEngine, HuggingFaceGenreClassifier
 from src.instrument_classifier import LocalONNXInstrumentClassifier, _sample_starts
 
 
@@ -90,13 +90,35 @@ class ArtistDNAEngineTests(unittest.TestCase):
         self.assertEqual(self.a.calls, 1)
         self.assertEqual(self.b.calls, 1)
 
-    def test_long_song_uses_three_representative_windows(self):
+    def test_long_song_uses_ten_genre_windows_and_three_auxiliary_windows(self):
         long_path = Path(self.tmp.name) / "long.wav"
         sf.write(long_path, np.zeros(120 * 16000, dtype=np.float32), 16000)
         result = self.engine.analyze_file(long_path)
-        self.assertEqual(result["analysis_sampling"]["selected_audio_seconds"], 30.0)
-        self.assertEqual(len(result["analysis_sampling"]["selected_windows"]), 3)
-        self.assertEqual([w["start_seconds"] for w in result["analysis_sampling"]["selected_windows"]], [0.0, 55.0, 110.0])
+        self.assertEqual(result["analysis_sampling"]["selected_audio_seconds"], 100.0)
+        self.assertEqual(len(result["analysis_sampling"]["selected_windows"]), 10)
+        self.assertEqual(len(result["analysis_sampling"]["auxiliary_windows"]), 3)
+        self.assertEqual(result["analysis_sampling"]["selected_windows"][0]["start_seconds"], 0.0)
+        self.assertEqual(result["analysis_sampling"]["selected_windows"][-1]["start_seconds"], 110.0)
+
+    def test_candidate_maps_generic_labels_to_genres(self):
+        class FakePipeline:
+            def __call__(self, audio, top_k=5):
+                return [
+                    {"label": "LABEL_9", "score": 0.8},
+                    {"label": "LABEL_6", "score": 0.1},
+                ]
+
+        classifier = HuggingFaceGenreClassifier(
+            "genre_ast_msaligs",
+            "msaligs/ast_fine_tuned_music_genre_10",
+        )
+        classifier._pipeline = FakePipeline()
+        classifier._sample_rate = 16000
+        predictions = classifier.predict(
+            np.zeros(16000, dtype=np.float32), 16000, top_k=10
+        )
+        self.assertEqual(predictions[0]["label"], "rock")
+        self.assertEqual(predictions[1]["label"], "metal")
 
     def test_marks_signature_as_not_generated_instead_of_inventing(self):
         result = self.engine.analyze_file(self.audio_path)
