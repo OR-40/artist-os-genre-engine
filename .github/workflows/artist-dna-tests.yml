@@ -166,7 +166,7 @@ jobs:
             --output "$GITHUB_WORKSPACE/la-terre-des-hommes.%(ext)s" \
             "https://lomnouvo.bandcamp.com/track/la-terre-des-hommes-2"
           test -s "$GITHUB_WORKSPACE/la-terre-des-hommes.mp3"
-          duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$RUNNER_TEMP/la-terre-des-hommes.mp3")"
+          duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$GITHUB_WORKSPACE/la-terre-des-hommes.mp3")"
           python -c 'import sys; d=float(sys.argv[1]); print(f"Downloaded track duration: {d:.1f}s"); assert d >= 180, "Downloaded audio is too short to represent the full song."' "$duration"
       - name: Analyze real song through ARTIST DNA API
         if: ${{ steps.token-check.outputs.available == 'true' }}
