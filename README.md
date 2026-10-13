@@ -27,14 +27,16 @@ Le moteur CPU isolé est en cours de validation sur la branche `feat/ast-msaligs
 
 ### Exécution du candidat AST exporté en ONNX
 
-Le candidat `msaligs/ast_fine_tuned_music_genre_10` peut être exécuté directement par ONNX Runtime sur CPU, sans charger les poids PyTorch. Placez les quatre fichiers exportés dans un dossier local :
+Le candidat AST exporté s'exécute directement via ONNX Runtime sur CPU, sans charger les poids PyTorch. Le fichier de poids (environ 345 Mo) est conservé hors de Git dans le dépôt privé Hugging Face `OR-40/artist-os-ast-onnx`.
 
-- `model.onnx`
-- `config.json`
-- `preprocessor_config.json`
-- `genre_labels.json`
+**Mode recommandé pour le runtime isolé :**
+- Ajouter `HF_TOKEN` comme secret côté serveur, avec uniquement un droit de lecture sur le dépôt privé du modèle. Ne jamais le committer ni l'afficher dans les logs.
+- Par défaut, le moteur télécharge et met en cache uniquement `model.onnx`, `config.json`, `preprocessor_config.json` et `genre_labels.json` depuis `ARTIST_DNA_ONNX_GENRE_REPO_ID` (par défaut `OR-40/artist-os-ast-onnx`).
+- Le cache Hugging Face évite de retélécharger le modèle à chaque chargement si le disque de l'environnement est persistant.
+- Pour un environnement qui fournit déjà les fichiers, définir `ARTIST_DNA_ONNX_GENRE_MODEL_PATH` sur le dossier local ; ce chemin explicite prend priorité sur le téléchargement distant.
+- Le dépôt de modèle est privé. Sans `HF_TOKEN` ou avec un jeton sans droit de lecture, le chargement échoue explicitement. Le jeton n'est pas inclus dans les messages d'erreur.
 
-Puis configurez `ARTIST_DNA_ONNX_GENRE_MODEL_PATH` avec le chemin de ce dossier. Lorsque cette variable est définie, l'orchestrateur choisit le classifieur ONNX local ; si elle est absente, le chemin Transformers existant est conservé. Le modèle de 345 Mo n'est volontairement pas stocké dans Git : il doit être fourni par l'environnement d'exécution via un artefact contrôlé. Ne configurez pas cette variable avant que les quatre fichiers soient présents et lisibles.
+Le téléchargement à froid nécessite une connexion réseau et environ 345 Mo d'espace disque. Avant un déploiement, il faut vérifier la persistance du cache, les limites de mémoire/CPU et la latence de l'API sur l'hébergement cible.
 
 Le classifieur vérifie le nom d'entrée ONNX, le nombre de sorties et la présence des labels. Les labels sont explicitement mappés dans `genre_labels.json`; cette correspondance reflète l'ordre documenté du candidat et doit rester traçable. Les scores sont des sorties du classifieur, pas des probabilités calibrées.
 
