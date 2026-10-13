@@ -25,6 +25,19 @@ Le moteur CPU isolé est en cours de validation sur la branche `feat/ast-msaligs
 - Ces 12 pistes restent `pending` : aucun audio n'a été téléchargé et elles ne sont pas encore admises à l'entraînement/évaluation officielle.
 - Pas de dataset audio réel validé pour l'entraînement.
 
+### Exécution du candidat AST exporté en ONNX
+
+Le candidat `msaligs/ast_fine_tuned_music_genre_10` peut être exécuté directement par ONNX Runtime sur CPU, sans charger les poids PyTorch. Placez les quatre fichiers exportés dans un dossier local :
+
+- `model.onnx`
+- `config.json`
+- `preprocessor_config.json`
+- `genre_labels.json`
+
+Puis configurez `ARTIST_DNA_ONNX_GENRE_MODEL_PATH` avec le chemin de ce dossier. Lorsque cette variable est définie, l'orchestrateur choisit le classifieur ONNX local ; si elle est absente, le chemin Transformers existant est conservé. Le modèle de 345 Mo n'est volontairement pas stocké dans Git : il doit être fourni par l'environnement d'exécution via un artefact contrôlé. Ne configurez pas cette variable avant que les quatre fichiers soient présents et lisibles.
+
+Le classifieur vérifie le nom d'entrée ONNX, le nombre de sorties et la présence des labels. Les labels sont explicitement mappés dans `genre_labels.json`; cette correspondance reflète l'ordre documenté du candidat et doit rester traçable. Les scores sont des sorties du classifieur, pas des probabilités calibrées.
+
 ## Environnement
 
 Python 3.12 ou version compatible. Le validateur n'a pas de dépendance externe.
