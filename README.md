@@ -30,8 +30,9 @@ Le moteur CPU isolé est en cours de validation sur la branche `feat/ast-msaligs
 Le candidat AST exporté s'exécute directement via ONNX Runtime sur CPU, sans charger les poids PyTorch. Le fichier de poids (environ 345 Mo) est conservé hors de Git dans le dépôt privé Hugging Face `OR-40/artist-os-ast-onnx`.
 
 **Mode recommandé pour le runtime isolé :**
+- Activer explicitement l'adaptateur en définissant `ARTIST_DNA_ONNX_GENRE_REPO_ID=OR-40/artist-os-ast-onnx` (ou `ARTIST_DNA_ONNX_GENRE_ENABLED=true`).
 - Ajouter `HF_TOKEN` comme secret côté serveur, avec uniquement un droit de lecture sur le dépôt privé du modèle. Ne jamais le committer ni l'afficher dans les logs.
-- Par défaut, le moteur télécharge et met en cache uniquement `model.onnx`, `config.json`, `preprocessor_config.json` et `genre_labels.json` depuis `ARTIST_DNA_ONNX_GENRE_REPO_ID` (par défaut `OR-40/artist-os-ast-onnx`).
+- Une fois l'adaptateur activé, le moteur télécharge et met en cache uniquement `model.onnx`, `config.json`, `preprocessor_config.json` et `genre_labels.json` depuis `ARTIST_DNA_ONNX_GENRE_REPO_ID` (par défaut `OR-40/artist-os-ast-onnx`).
 - Le cache Hugging Face évite de retélécharger le modèle à chaque chargement si le disque de l'environnement est persistant.
 - Pour un environnement qui fournit déjà les fichiers, définir `ARTIST_DNA_ONNX_GENRE_MODEL_PATH` sur le dossier local ; ce chemin explicite prend priorité sur le téléchargement distant.
 - Le dépôt de modèle est privé. Sans `HF_TOKEN` ou avec un jeton sans droit de lecture, le chargement échoue explicitement. Le jeton n'est pas inclus dans les messages d'erreur.
