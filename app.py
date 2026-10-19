@@ -1,10 +1,7 @@
-"""Local FastAPI wrapper for the isolated FireRedVAD prototype.
-
-This is not production-ready: no authentication, rate limiting, or deployment
-configuration is included. Keep it behind a trusted boundary during testing.
-"""
+"""ARTIST DNA CPU API. Protect inference routes with a server-side bearer token."""
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 import shutil
@@ -58,7 +55,7 @@ def decode_audio_to_wav(audio_path: str | Path, wav_path: str | Path) -> None:
         raise ValueError("Le fichier audio décodé ne contient pas d'audio mono 16 kHz valide.")
 
 
-def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> FastAPI:
+def create_app(detector: Any | None = None, dna_engine: Any | None = None, api_token: str | None = None) -> FastAPI:
     app = FastAPI(title="ARTIST OS Genre Engine", version="0.1.0")
     model_dir = Path(os.environ.get("FIREREDVAD_MODEL_DIR", "weights/FireRedVAD/AED"))
     app.state.detector = detector or FireRedVADDetector(
@@ -67,6 +64,16 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
     )
     app.state.model_dir = model_dir
     app.state.dna_engine = dna_engine or ArtistDNAEngine(vocal_detector=app.state.detector)
+    app.state.api_token = (os.getenv('ARTIST_DNA_API_TOKEN', '') if api_token is None else api_token).strip()
+
+    def require_api_token(request: Request) -> None:
+        expected = request.app.state.api_token
+        if not expected:
+            raise HTTPException(status_code=503, detail='Jeton API ARTIST DNA non configuré côté serveur.')
+        authorization = request.headers.get('authorization', '')
+        expected_header = f'Bearer {expected}'
+        if not hmac.compare_digest(authorization, expected_header):
+            raise HTTPException(status_code=401, detail='Authentification du moteur requise.')
 
     @app.get("/")
     def root() -> dict[str, str]:
@@ -88,6 +95,7 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
 
     @app.post("/analyze")
     async def analyze(request: Request, file: UploadFile = File(...)) -> JSONResponse:
+        require_api_token(request)
         filename = Path(file.filename or "").name
         suffix = Path(filename).suffix.lower()
         if suffix not in ALLOWED_SUFFIXES:
@@ -132,6 +140,7 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None) -> Fa
         audio: UploadFile | None = File(default=None),
         file: UploadFile | None = File(default=None),
     ) -> JSONResponse:
+        require_api_token(request)
         # The production /api/dna3 gateway sends the multipart field "audio".
         # Keep "file" as a compatibility alias for direct prototype callers.
         upload = audio or file
