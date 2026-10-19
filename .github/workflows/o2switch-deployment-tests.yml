@@ -1,0 +1,48 @@
+name: ARTIST DNA secure CPU deployment checks
+
+on:
+  pull_request:
+    paths:
+      - 'app.py'
+      - 'passenger_wsgi.py'
+      - 'requirements-o2switch.txt'
+      - 'requirements-test-api.txt'
+      - 'tests/test_api.py'
+      - 'tests/test_passenger_wsgi.py'
+      - 'tests/smoke_real_api.py'
+      - '.github/workflows/o2switch-deployment-tests.yml'
+  push:
+    branches:
+      - 'fix/secure-api-token-o2switch'
+    paths:
+      - 'app.py'
+      - 'passenger_wsgi.py'
+      - 'requirements-o2switch.txt'
+      - 'requirements-test-api.txt'
+      - 'tests/test_api.py'
+      - 'tests/test_passenger_wsgi.py'
+      - 'tests/smoke_real_api.py'
+      - '.github/workflows/o2switch-deployment-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-deployment-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-test-api.txt
+      - name: Install lightweight CPU/API test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-test-api.txt numpy scipy
+      - name: Compile deployment and API modules
+        run: python -m py_compile app.py passenger_wsgi.py
+      - name: Run API, authentication and Passenger WSGI tests
+        run: python -m unittest tests.test_api tests.test_passenger_wsgi -v
