@@ -20,7 +20,7 @@ from src.vocal_detection import FireRedVADDetector
 logger = logging.getLogger("artist_os_genre_engine")
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-ALLOWED_SUFFIXES = {".mp3", ".wav", ".flac", ".ogg", ".m4a"}
+ALLOWED_SUFFIXES = {".mp3"}
 
 
 def decode_audio_to_wav(audio_path: str | Path, wav_path: str | Path) -> None:
@@ -99,7 +99,7 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None, api_t
         filename = Path(file.filename or "").name
         suffix = Path(filename).suffix.lower()
         if suffix not in ALLOWED_SUFFIXES:
-            raise HTTPException(status_code=415, detail="Format non pris en charge. Fournir un MP3, WAV, FLAC, OGG ou M4A.")
+            raise HTTPException(status_code=415, detail="Format non pris en charge. Fournir un fichier MP3.")
 
         payload = await file.read(MAX_UPLOAD_BYTES + 1)
         await file.close()
