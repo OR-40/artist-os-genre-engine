@@ -2,14 +2,14 @@
 from __future__ import annotations
 
 import hmac
+import importlib.util
 import logging
 import os
-import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import soundfile as sf
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
@@ -20,39 +20,39 @@ from src.vocal_detection import FireRedVADDetector
 logger = logging.getLogger("artist_os_genre_engine")
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-ALLOWED_SUFFIXES = {".mp3", ".wav", ".flac", ".ogg", ".m4a"}
+ALLOWED_SUFFIXES = {".mp3"}
 
 
-def decode_audio_to_wav(audio_path: str | Path, wav_path: str | Path) -> None:
-    """Decode an uploaded supported audio file to mono 16 kHz PCM WAV using FFmpeg."""
+def decode_mp3_to_wav(mp3_path: str | Path, wav_path: str | Path) -> None:
+    """Decode MP3 to mono 16 kHz PCM WAV with bundled miniaudio; no FFmpeg needed."""
     try:
-        subprocess.run(
-            [
-                "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
-                "-i", str(audio_path), "-vn", "-ac", "1", "-ar", "16000",
-                "-c:a", "pcm_s16le", str(wav_path),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=180,
+        import miniaudio
+    except ImportError as exc:
+        raise RuntimeError("La dépendance miniaudio est requise pour décoder les MP3.") from exc
+
+    try:
+        decoded = miniaudio.decode_file(
+            str(mp3_path),
+            output_format=miniaudio.SampleFormat.FLOAT32,
+            nchannels=1,
+            sample_rate=16000,
         )
-    except FileNotFoundError as exc:
-        raise RuntimeError("FFmpeg est requis pour décoder les fichiers audio.") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("Le décodage audio a dépassé 180 secondes.") from exc
-    except subprocess.CalledProcessError as exc:
-        # Keep the client response generic, but retain FFmpeg's diagnostic in server logs.
-        detail = (exc.stderr or "").strip().replace("\n", " ")[:600]
-        logger.warning("FFmpeg audio decode failed (exit=%s): %s", exc.returncode, detail or "no stderr")
-        raise ValueError("Fichier audio illisible ou invalide.") from exc
+    except Exception as exc:
+        logger.warning("MP3 decode failed (%s)", type(exc).__name__)
+        raise ValueError("Fichier MP3 illisible ou invalide.") from exc
+
+    samples = np.asarray(decoded.samples, dtype=np.float32)
+    if samples.size == 0 or not np.isfinite(samples).all():
+        raise ValueError("Le MP3 ne contient pas de signal audio valide.")
 
     try:
+        sf.write(str(wav_path), samples, 16000, subtype="PCM_16")
         info = sf.info(str(wav_path))
     except Exception as exc:
-        raise ValueError("Le fichier audio n'a pas produit un audio valide.") from exc
+        raise OSError("Impossible d'écrire le WAV temporaire décodé.") from exc
+
     if info.frames <= 0 or info.samplerate != 16000 or info.channels != 1:
-        raise ValueError("Le fichier audio décodé ne contient pas d'audio mono 16 kHz valide.")
+        raise ValueError("Le MP3 décodé ne contient pas d'audio mono 16 kHz valide.")
 
 
 def create_app(detector: Any | None = None, dna_engine: Any | None = None, api_token: str | None = None) -> FastAPI:
@@ -87,7 +87,8 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None, api_t
             "model": "FireRedVAD",
             "execution_device": "CPU",
             "model_files_directory_exists": request.app.state.model_dir.is_dir(),
-            "ffmpeg_available": shutil.which("ffmpeg") is not None,
+            "mp3_decoder": "miniaudio",
+            "mp3_decoder_available": importlib.util.find_spec("miniaudio") is not None,
             "max_upload_bytes": MAX_UPLOAD_BYTES,
             "supported_formats": sorted(ALLOWED_SUFFIXES),
             "decoded_audio": "mono PCM WAV 16 kHz, temporary only",
@@ -99,7 +100,7 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None, api_t
         filename = Path(file.filename or "").name
         suffix = Path(filename).suffix.lower()
         if suffix not in ALLOWED_SUFFIXES:
-            raise HTTPException(status_code=415, detail="Format non pris en charge. Fournir un MP3, WAV, FLAC, OGG ou M4A.")
+            raise HTTPException(status_code=415, detail="Format non pris en charge. Fournir un fichier MP3.")
 
         payload = await file.read(MAX_UPLOAD_BYTES + 1)
         await file.close()
@@ -113,7 +114,7 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None, api_t
                 audio_path = Path(temp_dir) / ("upload" + suffix)
                 wav_path = Path(temp_dir) / "decoded.wav"
                 audio_path.write_bytes(payload)
-                decode_audio_to_wav(audio_path, wav_path)
+                decode_mp3_to_wav(audio_path, wav_path)
                 try:
                     analysis = request.app.state.detector.analyze_file(str(wav_path))
                 except FileNotFoundError as exc:
@@ -161,7 +162,7 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None, api_t
                 audio_path = Path(temp_dir) / ("upload" + suffix)
                 wav_path = Path(temp_dir) / "decoded.wav"
                 audio_path.write_bytes(payload)
-                decode_audio_to_wav(audio_path, wav_path)
+                decode_mp3_to_wav(audio_path, wav_path)
                 analysis = request.app.state.dna_engine.analyze_file(str(wav_path))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Fichier audio illisible ou invalide.") from exc

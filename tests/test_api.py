@@ -1,13 +1,15 @@
+import array
 import io
 import tempfile
 import unittest
 import wave
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app import create_app
+from app import create_app, decode_mp3_to_wav
 
 
 class FakeDNAEngine:
@@ -45,6 +47,24 @@ def fake_decode_mp3_to_wav(source_path, destination_path):
     Path(destination_path).write_bytes(make_wav())
 
 
+class Mp3DecoderTests(unittest.TestCase):
+    def test_decoder_uses_miniaudio_and_writes_mono_16khz_wav_without_ffmpeg(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            mp3_path = Path(temp_dir) / "input.mp3"
+            wav_path = Path(temp_dir) / "decoded.wav"
+            mp3_path.write_bytes(b"test fixture; decoder is mocked")
+            decoded = SimpleNamespace(samples=array.array("f", [0.1] * 16000))
+            with patch("miniaudio.decode_file", return_value=decoded) as decode:
+                decode_mp3_to_wav(mp3_path, wav_path)
+            decode.assert_called_once()
+            self.assertTrue(wav_path.exists())
+            import soundfile as sf
+            info = sf.info(str(wav_path))
+            self.assertEqual(info.samplerate, 16000)
+            self.assertEqual(info.channels, 1)
+            self.assertEqual(info.frames, 16000)
+
+
 class VocalAnalysisApiTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -61,10 +81,10 @@ class VocalAnalysisApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["model"], "FireRedVAD")
         self.assertEqual(response.json()["execution_device"], "CPU")
-        self.assertEqual(response.json()["supported_formats"], [".flac", ".m4a", ".mp3", ".ogg", ".wav"])
+        self.assertEqual(response.json()["supported_formats"], [".mp3"])
 
     def test_analyze_mp3_returns_analysis_envelope(self):
-        with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
+        with patch("app.decode_mp3_to_wav", side_effect=fake_decode_mp3_to_wav):
             response = self.client.post(
                 "/analyze",
                 files={"file": ("sample.mp3", b"mocked MP3 payload", "audio/mpeg")},
@@ -77,7 +97,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
         app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine(), api_token='test-api-token')
         client = TestClient(app, headers={'Authorization': 'Bearer test-api-token'})
         try:
-            with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
+            with patch("app.decode_mp3_to_wav", side_effect=fake_decode_mp3_to_wav):
                 response = client.post(
                     "/dna/analyze",
                     files={"audio": ("sample.mp3", b"mocked MP3 payload", "audio/mpeg")},
@@ -88,26 +108,24 @@ class VocalAnalysisApiTests(unittest.TestCase):
         finally:
             client.close()
 
-    def test_dna_endpoint_accepts_all_advertised_audio_formats(self):
+    def test_dna_endpoint_rejects_non_mp3_formats(self):
         app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine(), api_token='test-api-token')
         client = TestClient(app, headers={'Authorization': 'Bearer test-api-token'})
         samples = [
-            ("sample.mp3", "audio/mpeg"),
             ("sample.wav", "audio/wav"),
             ("sample.flac", "audio/flac"),
             ("sample.ogg", "audio/ogg"),
             ("sample.m4a", "audio/mp4"),
+            ("sample.aac", "audio/aac"),
         ]
         try:
-            with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
-                for filename, content_type in samples:
-                    with self.subTest(filename=filename):
-                        response = client.post(
-                            "/dna/analyze",
-                            files={"audio": (filename, b"mocked audio payload", content_type)},
-                        )
-                        self.assertEqual(response.status_code, 200, response.text)
-                        self.assertTrue(response.json()["ok"])
+            for filename, content_type in samples:
+                with self.subTest(filename=filename):
+                    response = client.post(
+                        "/dna/analyze",
+                        files={"audio": (filename, b"mocked audio payload", content_type)},
+                    )
+                    self.assertEqual(response.status_code, 415, response.text)
         finally:
             client.close()
 
@@ -125,7 +143,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
         app = create_app(detector=FakeDetector(), dna_engine=ExplodingDNAEngine(), api_token='test-api-token')
         client = TestClient(app, headers={'Authorization': 'Bearer test-api-token'})
         try:
-            with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
+            with patch("app.decode_mp3_to_wav", side_effect=fake_decode_mp3_to_wav):
                 with self.assertLogs("artist_os_genre_engine", level="ERROR") as captured:
                     response = client.post(
                         "/dna/analyze",
@@ -145,7 +163,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 415)
 
     def test_rejects_corrupt_mp3(self):
-        with patch("app.decode_audio_to_wav", side_effect=ValueError("bad mp3")):
+        with patch("app.decode_mp3_to_wav", side_effect=ValueError("bad mp3")):
             response = self.client.post(
                 "/analyze",
                 files={"file": ("sample.mp3", b"not-a-real-mp3", "audio/mpeg")},
