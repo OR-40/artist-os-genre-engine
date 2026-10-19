@@ -98,3 +98,11 @@ Deux modèles sont documentés pour une comparaison d'inférence, sans entraîne
 Le pilote devra d'abord utiliser un petit ensemble contrôlé de morceaux complets, avec étiquettes confirmées manuellement et diversité d'artistes. Il faudra mesurer les erreurs par genre et tester sur des artistes absents de l'ensemble de référence. Les extraits d'un même morceau ne doivent pas se retrouver à la fois dans les ensembles de référence et de test.
 
 Aucune intégration ARTIST OS ne doit être faite avant que la provenance des données, la qualité des résultats, la latence et la mémoire CPU soient documentées.
+
+## Préparation d'hébergement CPU sur o2switch
+
+Une branche de préparation ajoute un point d'entrée Passenger WSGI et protège les routes d'inférence par `Authorization: Bearer`. Les routes d'analyse refusent de fonctionner si `ARTIST_DNA_API_TOKEN` n'est pas défini.
+
+Procédure de préproduction (sans toucher au service paroles actuel ni à ARTIST OS Production) : [docs/O2SWITCH-CPU-DEPLOYMENT.md](docs/O2SWITCH-CPU-DEPLOYMENT.md).
+
+Cette préparation n'est pas un déploiement : l'installation des dépendances, FFmpeg, le temps de réponse et la mémoire doivent encore être validés sur l'hébergement réel avant de renseigner `DNA_URL`.
