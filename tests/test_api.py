@@ -48,9 +48,9 @@ def fake_decode_mp3_to_wav(source_path, destination_path):
 class VocalAnalysisApiTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.app = create_app(detector=FakeDetector())
+        self.app = create_app(detector=FakeDetector(), api_token='test-api-token')
         self.app.state.model_dir = Path(self.temp_dir.name)
-        self.client = TestClient(self.app)
+        self.client = TestClient(self.app, headers={'Authorization': 'Bearer test-api-token'})
 
     def tearDown(self):
         self.client.close()
@@ -74,8 +74,8 @@ class VocalAnalysisApiTests(unittest.TestCase):
         self.assertEqual(response.json()["analysis"]["duration_seconds"], 1.0)
 
     def test_dna_endpoint_returns_combined_analysis_contract_for_mp3(self):
-        app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine())
-        client = TestClient(app)
+        app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine(), api_token='test-api-token')
+        client = TestClient(app, headers={'Authorization': 'Bearer test-api-token'})
         try:
             with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
                 response = client.post(
@@ -122,7 +122,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
             client.close()
 
     def test_dna_inference_failure_is_logged_and_returns_generic_502(self):
-        app = create_app(detector=FakeDetector(), dna_engine=ExplodingDNAEngine())
+        app = create_app(detector=FakeDetector(), dna_engine=ExplodingDNAEngine(), api_token='test-api-token')
         client = TestClient(app)
         try:
             with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
@@ -158,6 +158,33 @@ class VocalAnalysisApiTests(unittest.TestCase):
             files={"file": ("empty.mp3", b"", "audio/mpeg")},
         )
         self.assertEqual(response.status_code, 400)
+
+
+    def test_inference_routes_require_bearer_token(self):
+        app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine(), api_token='test-api-token')
+        client = TestClient(app)
+        try:
+            response = client.post(
+                '/dna/analyze',
+                files={'audio': ('sample.mp3', b'mocked audio payload', 'audio/mpeg')},
+            )
+            self.assertEqual(response.status_code, 401)
+            self.assertIn('Authentification', response.json()['detail'])
+        finally:
+            client.close()
+
+    def test_inference_fails_closed_when_server_token_is_missing(self):
+        app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine(), api_token='')
+        client = TestClient(app, headers={'Authorization': 'Bearer anything'})
+        try:
+            response = client.post(
+                '/dna/analyze',
+                files={'audio': ('sample.mp3', b'mocked audio payload', 'audio/mpeg')},
+            )
+            self.assertEqual(response.status_code, 503)
+            self.assertIn('non configuré', response.json()['detail'])
+        finally:
+            client.close()
 
 
 if __name__ == "__main__":
