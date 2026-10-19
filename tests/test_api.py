@@ -1,13 +1,15 @@
+import array
 import io
 import tempfile
 import unittest
 import wave
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app import create_app
+from app import create_app, decode_mp3_to_wav
 
 
 class FakeDNAEngine:
@@ -45,6 +47,23 @@ def fake_decode_mp3_to_wav(source_path, destination_path):
     Path(destination_path).write_bytes(make_wav())
 
 
+class Mp3DecoderTests(unittest.TestCase):
+    def test_decoder_uses_miniaudio_and_writes_mono_16khz_wav_without_ffmpeg(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            mp3_path = Path(temp_dir) / "input.mp3"
+            wav_path = Path(temp_dir) / "decoded.wav"
+            mp3_path.write_bytes(b"test fixture; decoder is mocked")
+            decoded = SimpleNamespace(samples=array.array("f", [0.1] * 16000))
+            with patch("miniaudio.decode_file", return_value=decoded) as decode:
+                decode_mp3_to_wav(mp3_path, wav_path)
+            decode.assert_called_once()
+            self.assertTrue(wav_path.exists())
+            info = __import__("soundfile").info(str(wav_path))
+            self.assertEqual(info.samplerate, 16000)
+            self.assertEqual(info.channels, 1)
+            self.assertEqual(info.frames, 16000)
+
+
 class VocalAnalysisApiTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -64,7 +83,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
         self.assertEqual(response.json()["supported_formats"], [".mp3"])
 
     def test_analyze_mp3_returns_analysis_envelope(self):
-        with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
+        with patch("app.decode_mp3_to_wav", side_effect=fake_decode_mp3_to_wav):
             response = self.client.post(
                 "/analyze",
                 files={"file": ("sample.mp3", b"mocked MP3 payload", "audio/mpeg")},
