@@ -8,7 +8,7 @@ Cette procédure prépare un hébergement CPU sans nouveau fournisseur ni GPU. E
 - Créer une application Python distincte, idéalement sur un sous-domaine audio dédié (par exemple un sous-domaine choisi dans cPanel, sans remplacer le service actuel).
 - L'application expose `POST /dna/analyze` et reçoit le champ multipart `audio`.
 - Le proxy Cloudflare ARTIST OS transmet `Authorization: Bearer <DNA3_TOKEN>`.
-- Le moteur exige désormais le secret serveur `ARTIST_DNA_API_TOKEN` et refuse les requêtes d'analyse sans jeton. Si le secret n'est pas configuré, les routes d'inférence répondent HTTP 503 (fail closed).
+- Le moteur exige le secret serveur `ARTIST_DNA_API_TOKEN` et refuse les requêtes d'analyse sans jeton. Si le secret n'est pas configuré, les routes d'inférence répondent HTTP 503 (fail closed).
 
 ## Prérequis
 
@@ -19,7 +19,7 @@ Cette procédure prépare un hébergement CPU sans nouveau fournisseur ni GPU. E
 
 ## Fichiers et lancement
 
-Déployer le contenu de la branche de préparation `fix/secure-api-token-o2switch` dans le répertoire de l'application. Le fichier de démarrage Passenger est `passenger_wsgi.py`, avec le point d'entrée `application`.
+Déployer le contenu de la branche de préparation `fix/secure-api-token-o2switch` avec les changements proposés par la PR de smoke test. Le fichier de démarrage Passenger est `passenger_wsgi.py`, avec le point d'entrée `application`.
 
 Installer les dépendances depuis l'environnement virtuel créé par cPanel :
 
@@ -41,13 +41,28 @@ Créer ces variables dans la configuration de l'application Python ; ne jamais l
 
 Les poids sont téléchargés côté serveur à la première inférence et mis en cache dans le répertoire utilisateur. Le jeton Hugging Face ne doit jamais être transmis au navigateur.
 
+## Smoke test de déploiement
+
+Le script `scripts/smoke_test_deployment.py` utilise uniquement la bibliothèque standard Python. Il vérifie HTTPS, `/health`, FFmpeg, le refus des requêtes sans jeton et avec un jeton invalide, puis envoie un véritable fichier audio et valide le contrat JSON `{ok: true, dna: {...}}`. Il ne journalise ni le jeton, ni le contenu de la réponse d'analyse.
+
+Exécuter depuis un poste de confiance, avec un morceau de test non sensible :
+
+```bash
+export ARTIST_DNA_API_TOKEN='valeur identique au secret serveur'
+python scripts/smoke_test_deployment.py \
+  --base-url 'https://sous-domaine-audio.example' \
+  --audio '/chemin/vers/un-morceau-test.mp3'
+```
+
+Le script attend un refus HTTP 401 pour un jeton invalide. Une requête sans jeton doit être refusée en HTTP 401 si le secret serveur est configuré, ou en HTTP 503 si le serveur est en mode fail-closed faute de secret. Le script avertit si l'analyse dépasse 180 secondes et si les sections de résultat attendues manquent. Un succès technique ne prouve pas la précision musicale : vérifier manuellement le genre du morceau de référence et consulter les métriques CPU/RAM côté hébergeur.
+
 ## Tests avant de brancher ARTIST OS
 
 1. `GET /health` doit répondre 200 et confirmer FFmpeg disponible.
-2. `POST /dna/analyze` sans jeton doit répondre 401.
-3. Avec un jeton invalide, la route doit répondre 401.
-4. Avec le jeton correct et un petit MP3 de test, l'API doit répondre `ok: true`, inclure `genre_analysis.models.genre_candidate_onnx`, `audio_tag_analysis` et `vocal_analysis`.
-5. Tester ensuite le morceau de référence complet, mesurer la durée et vérifier la consommation CPU/RAM. Ne pas confondre le smoke test synthétique avec une validation de précision musicale.
+2. Les tests d'authentification doivent refuser toute requête sans jeton valide.
+3. Avec le jeton correct et un MP3 réel, l'API doit répondre `ok: true` et renvoyer un objet `dna` non vide.
+4. Vérifier que `genre_analysis.models.genre_candidate_onnx`, `audio_tag_analysis` et `vocal_analysis` sont présents dans le résultat ; sinon, corriger l'intégration avant de poursuivre.
+5. Tester ensuite le morceau de référence complet, mesurer la durée et vérifier la consommation CPU/RAM et l'absence de timeout Passenger.
 
 ## Branchement Cloudflare
 
@@ -56,7 +71,7 @@ Après réussite des tests précédents seulement, configurer **Preview uniqueme
 - `DNA_URL` = URL HTTPS de l'application audio dédiée, sans chemin `/dna/analyze` (le proxy l'ajoute).
 - `DNA3_TOKEN` = même valeur que `ARTIST_DNA_API_TOKEN`.
 
-Ne pas modifier les secrets Production avant une recette complète de Preview. Le service paroles peut continuer d'utiliser son URL existante ; la passerelle unifiée peut aussi utiliser la même base URL si le service accepte le champ `lyrics`.
+Ne pas modifier les secrets Production avant une recette complète de Preview. Le service paroles peut continuer d'utiliser son URL existante ; la passerelle audio de `/api/dna3` ne doit pas être confondue avec la route paroles.
 
 ## Critère d'arrêt
 
