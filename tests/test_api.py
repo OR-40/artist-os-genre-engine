@@ -89,8 +89,8 @@ class VocalAnalysisApiTests(unittest.TestCase):
             client.close()
 
     def test_dna_endpoint_accepts_all_advertised_audio_formats(self):
-        app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine())
-        client = TestClient(app)
+        app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine(), api_token='test-api-token')
+        client = TestClient(app, headers={'Authorization': 'Bearer test-api-token'})
         samples = [
             ("sample.mp3", "audio/mpeg"),
             ("sample.wav", "audio/wav"),
@@ -112,8 +112,8 @@ class VocalAnalysisApiTests(unittest.TestCase):
             client.close()
 
     def test_dna_endpoint_rejects_missing_audio(self):
-        app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine())
-        client = TestClient(app)
+        app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine(), api_token='test-api-token')
+        client = TestClient(app, headers={'Authorization': 'Bearer test-api-token'})
         try:
             response = client.post("/dna/analyze")
             self.assertEqual(response.status_code, 400)
@@ -123,7 +123,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
 
     def test_dna_inference_failure_is_logged_and_returns_generic_502(self):
         app = create_app(detector=FakeDetector(), dna_engine=ExplodingDNAEngine(), api_token='test-api-token')
-        client = TestClient(app)
+        client = TestClient(app, headers={'Authorization': 'Bearer test-api-token'})
         try:
             with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
                 with self.assertLogs("artist_os_genre_engine", level="ERROR") as captured:
