@@ -43,7 +43,7 @@ Les poids sont téléchargés côté serveur à la première inférence et mis e
 
 ## Tests avant de brancher ARTIST OS
 
-1. `GET /health` doit répondre 200 et confirmer FFmpeg disponible.
+1. `GET /health` doit répondre 200 et confirmer `mp3_decoder_available: true`.
 2. `POST /dna/analyze` sans jeton doit répondre 401.
 3. Avec un jeton invalide, la route doit répondre 401.
 4. Avec le jeton correct et un petit MP3 de test, l'API doit répondre `ok: true`, inclure `genre_analysis.models.genre_candidate_onnx`, `audio_tag_analysis` et `vocal_analysis`.
