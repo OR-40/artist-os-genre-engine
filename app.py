@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hmac
+import importlib.util
 import logging
 import os
 import tempfile
@@ -87,7 +88,7 @@ def create_app(detector: Any | None = None, dna_engine: Any | None = None, api_t
             "execution_device": "CPU",
             "model_files_directory_exists": request.app.state.model_dir.is_dir(),
             "mp3_decoder": "miniaudio",
-            "mp3_decoder_available": __import__("importlib.util", fromlist=["find_spec"]).find_spec("miniaudio") is not None,
+            "mp3_decoder_available": importlib.util.find_spec("miniaudio") is not None,
             "max_upload_bytes": MAX_UPLOAD_BYTES,
             "supported_formats": sorted(ALLOWED_SUFFIXES),
             "decoded_audio": "mono PCM WAV 16 kHz, temporary only",
