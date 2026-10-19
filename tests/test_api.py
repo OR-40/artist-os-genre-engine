@@ -58,7 +58,8 @@ class Mp3DecoderTests(unittest.TestCase):
                 decode_mp3_to_wav(mp3_path, wav_path)
             decode.assert_called_once()
             self.assertTrue(wav_path.exists())
-            info = __import__("soundfile").info(str(wav_path))
+            import soundfile as sf
+            info = sf.info(str(wav_path))
             self.assertEqual(info.samplerate, 16000)
             self.assertEqual(info.channels, 1)
             self.assertEqual(info.frames, 16000)
@@ -96,7 +97,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
         app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine(), api_token='test-api-token')
         client = TestClient(app, headers={'Authorization': 'Bearer test-api-token'})
         try:
-            with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
+            with patch("app.decode_mp3_to_wav", side_effect=fake_decode_mp3_to_wav):
                 response = client.post(
                     "/dna/analyze",
                     files={"audio": ("sample.mp3", b"mocked MP3 payload", "audio/mpeg")},
@@ -142,7 +143,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
         app = create_app(detector=FakeDetector(), dna_engine=ExplodingDNAEngine(), api_token='test-api-token')
         client = TestClient(app, headers={'Authorization': 'Bearer test-api-token'})
         try:
-            with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
+            with patch("app.decode_mp3_to_wav", side_effect=fake_decode_mp3_to_wav):
                 with self.assertLogs("artist_os_genre_engine", level="ERROR") as captured:
                     response = client.post(
                         "/dna/analyze",
@@ -162,7 +163,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 415)
 
     def test_rejects_corrupt_mp3(self):
-        with patch("app.decode_audio_to_wav", side_effect=ValueError("bad mp3")):
+        with patch("app.decode_mp3_to_wav", side_effect=ValueError("bad mp3")):
             response = self.client.post(
                 "/analyze",
                 files={"file": ("sample.mp3", b"not-a-real-mp3", "audio/mpeg")},
