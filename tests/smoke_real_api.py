@@ -29,6 +29,7 @@ os.environ["ARTIST_DNA_ONNX_GENRE_REPO_ID"] = os.getenv(
     "ARTIST_DNA_ONNX_GENRE_REPO_ID", "OR-40/artist-os-ast-onnx"
 )
 os.environ["ARTIST_DNA_INSTRUMENTS_ENABLED"] = "false"
+os.environ["ARTIST_DNA_API_TOKEN"] = os.getenv("ARTIST_DNA_API_TOKEN", "ci-smoke-token")
 
 from app import create_app
 
@@ -73,6 +74,7 @@ def main() -> int:
             response = client.post(
                 "/dna/analyze",
                 files={"audio": ("synthetic.mp3", handle, "audio/mpeg")},
+                headers={"Authorization": f"Bearer {os.environ['ARTIST_DNA_API_TOKEN']}"},
             )
 
         if response.status_code != 200:

@@ -1,29 +1,19 @@
 # ARTIST OS — Genre Engine
 
-Prototype isolé destiné à évaluer une analyse de genres musicaux peu coûteuse, avant toute intégration à ARTIST OS.
+Prototype CPU isolé de l'orchestration ARTIST DNA. L'intégration technique est testée en CI avec un MP3 synthétique et le modèle AST ONNX privé, mais la précision musicale n'est pas validée sur un corpus de référence ni sur tous les morceaux de l'artiste.
 
-**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** Il contient un validateur de manifeste, un prototype de détection d'événements vocaux FireRedVAD et une API locale de test. Le candidat `msaligs/ast_fine_tuned_music_genre_10` a donné un signal rock plus cohérent sur un morceau de test, mais il n'est pas encore validé sur un jeu de référence.
+**Ce dépôt ne déploie rien en production et ne modifie pas le site ARTIST OS.** Les poids restent hors de Git ; le moteur n'est pas déclaré opérationnel tant qu'un vrai MP3 n'a pas été traité sur l'hébergement cible et dans ARTIST OS Preview.
 
-## Moteur ARTIST DNA — prototype d'orchestration
+## Moteur ARTIST DNA — orchestration CPU
 
-Le moteur CPU isolé est en cours de validation sur la branche `feat/ast-msaligs-candidate-main` :
-
-- `POST /dna/analyze` combine deux candidats de classification de genres (baseline wav2vec2 et candidat AST) avec la détection vocale FireRedVAD.
-- Les deux classifieurs sont chargés à la demande. Les identifiants peuvent être remplacés avec `ARTIST_DNA_MODEL_BASELINE` et `ARTIST_DNA_MODEL_AST`.
-- Pour la classification des genres, le moteur utilise la piste entière si elle dure au plus 30 secondes ; sinon, il sélectionne trois fenêtres de 10 secondes au début, au milieu et à la fin (30 secondes au total). Le candidat ONNX reçoit le même audio sélectionné. Les scores ne sont pas présentés comme des probabilités calibrées. Cette stratégie accélère l'analyse mais peut manquer un instrument ou un changement présent ailleurs dans le morceau.
-- L'analyse instrumentale par défaut utilise `src/instrument_classifier.py` : modèle ONNX quantifié `onnx-community/Musical-Instrument-Classification-ONNX`, exécution locale via `CPUExecutionProvider`, jusqu'à six extraits de 3 secondes. Le fichier ONNX quantifié fait environ 90 Mo et est téléchargé depuis Hugging Face au premier usage, puis mis en cache.
-- `ARTIST_DNA_INSTRUMENTS_ENABLED=true` active l'analyse ONNX par défaut ; définir explicitement `false` permet de la désactiver. Aucun service distant d'instruments ni variable `INSTRUMENTS_URL` n'est requis par défaut.
-- La signature artistique reste volontairement non générée tant que les preuves musicales ne suffisent pas. Les prédictions d'instruments sont expérimentales : le modèle cible neuf catégories et peut confondre des instruments dans un mix complet.
-- Les deux classifieurs de genres restent actifs : baseline wav2vec2 et candidat AST, tous deux exécutés sur CPU via Transformers (`device=-1`). Le modèle AST compte environ 86,5 millions de paramètres ; la latence et la mémoire doivent être mesurées sur l'hébergement cible avant toute mise en production.
-- Si l'analyse ONNX échoue, l'orchestrateur conserve l'analyse des genres et de la voix, et signale l'analyse instrumentale comme indisponible. Les erreurs sont journalisées sans inclure le contenu audio.
-- `src/remote_instruments.py` reste disponible pour les tests et une compatibilité explicite, mais n'est plus utilisé par défaut.
-- Le pipeline complet est défini par `requirements-dna.txt`. L'API MP3 nécessite l'exécutable système FFmpeg pour le décodage temporaire ; les tests de contrat simulent ce décodage.
-- Endpoint prototype `POST /analyze` : réponse `{ "analysis": ... }`. Endpoint orchestrateur `POST /dna/analyze` : champ multipart `audio` (alias `file` conservé pour tests directs) et réponse `{ "ok": true, "dna": ... }`, compatible avec le proxy `/api/dna3` existant dans ARTIST OS. Les deux acceptent un MP3 de 50 Mio maximum, décodé en WAV PCM mono 16 kHz temporaire avec FFmpeg.
-- WAV/FLAC/OGG/M4A refusés à l'entrée : seul le MP3 est accepté. Le décodage interne dépend de l'exécutable FFmpeg disponible sur le serveur ; aucun déploiement ni branchement production.
-- Pas de téléchargement automatique de musique.
-- Premier inventaire de 12 morceaux enregistrés de Kevin MacLeod, avec pages officielles et licence CC BY 4.0 consignées dans `data/pilot_candidates.csv`.
-- Ces 12 pistes restent `pending` : aucun audio n'a été téléchargé et elles ne sont pas encore admises à l'entraînement/évaluation officielle.
-- Pas de dataset audio réel validé pour l'entraînement.
+- `POST /dna/analyze` combine un classifieur dédié de genres, le tagueur AST AudioSet (séparé des genres) et FireRedVAD. Le classifieur de genre ONNX peut utiliser le dépôt privé `OR-40/artist-os-ast-onnx`; sans activation ONNX, le candidat `msaligs/ast_fine_tuned_music_genre_10` est utilisé via Transformers sur CPU.
+- Pour les morceaux longs, le moteur choisit jusqu'à dix fenêtres de 10 secondes réparties dans la piste. L'analyse auxiliaire AST AudioSet et les instruments utilisent un sous-ensemble de fenêtres. Cela réduit la latence mais peut manquer un élément présent ailleurs dans le morceau.
+- Les scores de genre sont des sorties de modèles, pas des probabilités calibrées. Les tags AST AudioSet sont des événements/classes audio et ne sont pas mélangés au consensus des genres.
+- La détection vocale repose sur FireRedVAD. L'analyse instrumentale utilise un classifieur ONNX expérimental de neuf catégories, exécuté localement sur CPU ; elle peut confondre les instruments dans un mix complet. Pour la première recette d'hébergement, la désactiver avec `ARTIST_DNA_INSTRUMENTS_ENABLED=false`.
+- La signature artistique n'est pas générée à partir des seuls scores de genre ; elle exige des preuves musicales suffisantes.
+- Le modèle ONNX d'instruments et le modèle AST de genre sont téléchargés côté serveur et mis en cache. Les poids privés exigent un secret Hugging Face de lecture, jamais exposé au navigateur.
+- Les fichiers audio sont décodés en WAV PCM mono 16 kHz temporaire par FFmpeg puis supprimés avec le répertoire temporaire. La taille maximale est de 50 Mio ; les formats MP3, WAV, FLAC, OGG et M4A sont acceptés.
+- Les routes d'inférence `POST /analyze` et `POST /dna/analyze` exigent `Authorization: Bearer`. Le secret serveur `ARTIST_DNA_API_TOKEN` est obligatoire : s'il manque, l'API échoue en HTTP 503 ; un jeton absent ou incorrect reçoit HTTP 401. `GET /health` reste public et ne charge pas les poids.
 
 ### Exécution du candidat AST exporté en ONNX
 
@@ -98,3 +88,11 @@ Deux modèles sont documentés pour une comparaison d'inférence, sans entraîne
 Le pilote devra d'abord utiliser un petit ensemble contrôlé de morceaux complets, avec étiquettes confirmées manuellement et diversité d'artistes. Il faudra mesurer les erreurs par genre et tester sur des artistes absents de l'ensemble de référence. Les extraits d'un même morceau ne doivent pas se retrouver à la fois dans les ensembles de référence et de test.
 
 Aucune intégration ARTIST OS ne doit être faite avant que la provenance des données, la qualité des résultats, la latence et la mémoire CPU soient documentées.
+
+## Préparation d'hébergement CPU sur o2switch
+
+Une branche de préparation ajoute un point d'entrée Passenger WSGI et protège les routes d'inférence par `Authorization: Bearer`. Les routes d'analyse refusent de fonctionner si `ARTIST_DNA_API_TOKEN` n'est pas défini.
+
+Procédure de préproduction (sans toucher au service paroles actuel ni à ARTIST OS Production) : [docs/O2SWITCH-CPU-DEPLOYMENT.md](docs/O2SWITCH-CPU-DEPLOYMENT.md).
+
+Cette préparation n'est pas un déploiement : l'installation des dépendances, FFmpeg, le temps de réponse et la mémoire doivent encore être validés sur l'hébergement réel avant de renseigner `DNA_URL`.
