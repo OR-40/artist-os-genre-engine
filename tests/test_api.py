@@ -61,7 +61,7 @@ class VocalAnalysisApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["model"], "FireRedVAD")
         self.assertEqual(response.json()["execution_device"], "CPU")
-        self.assertEqual(response.json()["supported_formats"], [".flac", ".m4a", ".mp3", ".ogg", ".wav"])
+        self.assertEqual(response.json()["supported_formats"], [".mp3"])
 
     def test_analyze_mp3_returns_analysis_envelope(self):
         with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
@@ -88,26 +88,24 @@ class VocalAnalysisApiTests(unittest.TestCase):
         finally:
             client.close()
 
-    def test_dna_endpoint_accepts_all_advertised_audio_formats(self):
+    def test_dna_endpoint_rejects_non_mp3_formats(self):
         app = create_app(detector=FakeDetector(), dna_engine=FakeDNAEngine(), api_token='test-api-token')
         client = TestClient(app, headers={'Authorization': 'Bearer test-api-token'})
         samples = [
-            ("sample.mp3", "audio/mpeg"),
             ("sample.wav", "audio/wav"),
             ("sample.flac", "audio/flac"),
             ("sample.ogg", "audio/ogg"),
             ("sample.m4a", "audio/mp4"),
+            ("sample.aac", "audio/aac"),
         ]
         try:
-            with patch("app.decode_audio_to_wav", side_effect=fake_decode_mp3_to_wav):
-                for filename, content_type in samples:
-                    with self.subTest(filename=filename):
-                        response = client.post(
-                            "/dna/analyze",
-                            files={"audio": (filename, b"mocked audio payload", content_type)},
-                        )
-                        self.assertEqual(response.status_code, 200, response.text)
-                        self.assertTrue(response.json()["ok"])
+            for filename, content_type in samples:
+                with self.subTest(filename=filename):
+                    response = client.post(
+                        "/dna/analyze",
+                        files={"audio": (filename, b"mocked audio payload", content_type)},
+                    )
+                    self.assertEqual(response.status_code, 415, response.text)
         finally:
             client.close()
 
