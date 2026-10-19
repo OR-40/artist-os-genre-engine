@@ -14,7 +14,7 @@ Cette procédure prépare un hébergement CPU sans nouveau fournisseur ni GPU. E
 
 1. Vérifier dans cPanel que « Setup Python App » est disponible et choisir Python 3.12.
 2. Créer l'application dans un répertoire racine **distinct du document root public**. Ne pas placer le code, les poids ou l'environnement virtuel dans le répertoire public du domaine.
-3. Vérifier la disponibilité de FFmpeg via `which ffmpeg`. Il sert ici à décoder le MP3 fourni en signal PCM pour les modèles, pas à convertir les formats que l'artiste peut importer. S'il est absent, demander à o2switch si l'exécutable peut être activé sur le compte avant de poursuivre.
+3. Le décodage MP3 utilise `miniaudio`, une bibliothèque embarquée dans l'environnement Python ; FFmpeg n'est plus un prérequis. Après installation des dépendances, vérifier que `mp3_decoder_available` vaut `true` dans `/health`.
 4. Vérifier les limites CPU, mémoire et temps d'exécution du compte. L'analyse d'un morceau complet peut être longue ; ne pas annoncer le service comme opérationnel avant d'avoir mesuré une requête réelle et vérifié l'absence de timeout Passenger.
 
 ## Fichiers et lancement
@@ -60,4 +60,4 @@ Ne pas modifier les secrets Production avant une recette complète de Preview. L
 
 ## Critère d'arrêt
 
-Si l'installation des dépendances CPU, le téléchargement des poids privés, FFmpeg, la mémoire ou le délai de réponse échoue sur l'offre o2switch actuelle, ne pas activer la route et ne pas acheter de ressource. Conserver la passerelle en 503 et reprendre le choix d'hébergement à partir des mesures observées.
+Si l'installation des dépendances CPU, le téléchargement des poids privés, le décodage MP3, la mémoire ou le délai de réponse échoue sur l'offre o2switch actuelle, ne pas activer la route et ne pas acheter de ressource. Conserver la passerelle en 503 et reprendre le choix d'hébergement à partir des mesures observées.
