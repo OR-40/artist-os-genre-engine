@@ -6,7 +6,7 @@ Cette procédure prépare un hébergement CPU sans nouveau fournisseur ni GPU. E
 
 - Garder le service paroles actuel sur son domaine et son chemin existants.
 - Créer une application Python distincte, idéalement sur un sous-domaine audio dédié (par exemple un sous-domaine choisi dans cPanel, sans remplacer le service actuel).
-- L'application expose `POST /dna/analyze` et reçoit le champ multipart `audio`.
+- L'application accepte **uniquement les fichiers MP3** via `POST /dna/analyze`, champ multipart `audio`. Le MP3 est décodé en WAV PCM mono 16 kHz temporaire pour les modèles qui exigent ce format ; il n'est pas réencodé en MP3.
 - Le proxy Cloudflare ARTIST OS transmet `Authorization: Bearer <DNA3_TOKEN>`.
 - Le moteur exige désormais le secret serveur `ARTIST_DNA_API_TOKEN` et refuse les requêtes d'analyse sans jeton. Si le secret n'est pas configuré, les routes d'inférence répondent HTTP 503 (fail closed).
 
@@ -14,7 +14,7 @@ Cette procédure prépare un hébergement CPU sans nouveau fournisseur ni GPU. E
 
 1. Vérifier dans cPanel que « Setup Python App » est disponible et choisir Python 3.12.
 2. Créer l'application dans un répertoire racine **distinct du document root public**. Ne pas placer le code, les poids ou l'environnement virtuel dans le répertoire public du domaine.
-3. Vérifier la disponibilité de FFmpeg via `which ffmpeg`. S'il est absent, demander à o2switch si l'exécutable peut être activé sur le compte avant de poursuivre.
+3. Vérifier la disponibilité de FFmpeg via `which ffmpeg`. Il sert ici à décoder le MP3 fourni en signal PCM pour les modèles, pas à convertir les formats que l'artiste peut importer. S'il est absent, demander à o2switch si l'exécutable peut être activé sur le compte avant de poursuivre.
 4. Vérifier les limites CPU, mémoire et temps d'exécution du compte. L'analyse d'un morceau complet peut être longue ; ne pas annoncer le service comme opérationnel avant d'avoir mesuré une requête réelle et vérifié l'absence de timeout Passenger.
 
 ## Fichiers et lancement
