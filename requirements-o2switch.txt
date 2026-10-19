@@ -1,6 +1,7 @@
 # cPanel/o2switch CPU deployment dependencies.
 # Prefer the official CPU-only PyTorch wheel index; no CUDA/GPU packages are needed.
---extra-index-url https://download.pytorch.org/whl/cpu
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
 -r requirements-dna.txt
 torch==2.8.0
 a2wsgi>=1.10,<2
