@@ -5,3 +5,4 @@
 -r requirements-dna.txt
 torch==2.8.0
 a2wsgi>=1.10,<2
+miniaudio>=1.70,<2
